@@ -3,524 +3,630 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="page-title">スタンドアロンタイマー</title>
-    <!-- Tailwind CSS for modern styling -->
+    <title>実践PJ第6回 - タイマー (ステップ6)</title>
+    <!-- Tailwind CSS を使って美しくレイアウトします -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 残り時間わずか（10秒以下）のときの点滅エフェクト */
-        @keyframes pulse-slow {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-        .pulse-warning {
-            animation: pulse-slow 1s infinite;
+        /* デジタル数字風のフォントをインポート */
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        .timer-display {
+            font-family: 'Share Tech Mono', monospace;
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4 font-sans">
+<body class="bg-slate-50 min-h-screen flex flex-col items-center justify-center p-4">
 
-    <div class="w-full max-w-md bg-slate-800 rounded-3xl shadow-2xl border border-slate-700 p-8 text-center relative overflow-hidden">
+    <!-- 全体を包むコンテナ -->
+    <div class="w-full max-w-4xl flex flex-col md:flex-row gap-6 items-stretch justify-center">
         
-        <!-- 1. CSV設定（インポート）エリア -->
-        <div class="mb-4">
-            <label class="block mb-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider text-left">CSV設定（Googleドライブ等）</label>
-            <div class="flex flex-col gap-2">
-                <input 
-                    type="text" 
-                    id="csv-url-input" 
-                    placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" 
-                    class="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-750 text-slate-200 focus:outline-none focus:border-teal-500 transition-colors"
-                />
-                <button 
-                    id="btn-load-url" 
-                    class="w-full py-2 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-600 text-teal-400 active:scale-98 transition-all border border-teal-500/10"
-                >
-                    Webから設定を読み込む
-                </button>
+        <!-- 左側：タイマーコントロール本体 -->
+        <div class="bg-white p-6 rounded-2xl shadow-xl flex-1 border border-slate-100 text-center flex flex-col justify-between">
+            <div>
+                <!-- 記録名（タイトル表示） -->
+                <h1 id="record-name" class="text-2xl font-bold text-slate-800 mb-1">実践PJ第6回</h1>
+                <p class="text-xs text-slate-500 mb-4">カウントダウンタイマー (ステップ6)</p>
+
+                <!-- タブ切り替え -->
+                <div class="mb-4 bg-slate-50 p-1.5 rounded-xl flex gap-1 border border-slate-100">
+                    <button id="tab-web" class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-sm transition-all">
+                        Webから設定
+                    </button>
+                    <button id="tab-local" class="flex-1 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all">
+                        ローカル設定
+                    </button>
+                </div>
+
+                <!-- Web設定入力エリア -->
+                <div id="panel-web" class="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-left">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Googleスプレッドシートの公開CSV URL</label>
+                    <div class="flex gap-2">
+                        <input type="url" id="web-url-input" 
+                            placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" 
+                            class="flex-grow p-2 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
+                        <button id="web-load-btn" class="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg shadow-sm transition-all shrink-0">
+                            読み込み
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ローカルファイル読み込みエリア -->
+                <div id="panel-local" class="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-left hidden">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">設定ファイル (CSV) の選択</label>
+                    <input type="file" id="csv-file-input" accept=".csv" class="block w-full text-xs text-slate-500
+                        file:mr-3 file:py-1.5 file:px-3
+                        file:rounded-full file:border-0
+                        file:text-xs file:font-semibold
+                        file:bg-emerald-50 file:text-emerald-700
+                        hover:file:bg-emerald-100
+                        cursor-pointer" />
+                </div>
+
+                <!-- タイマー表示エリア -->
+                <div class="relative flex items-center justify-center mb-6">
+                    <!-- 外側のサークル背景 -->
+                    <div class="w-56 h-56 rounded-full border-4 border-slate-100 flex flex-col items-center justify-center bg-slate-50 relative overflow-hidden">
+                        <!-- 装飾用のアニメーションサークル -->
+                        <div id="visual-ring" class="absolute inset-0 border-4 border-emerald-500 rounded-full transition-all duration-300 scale-95 opacity-20"></div>
+                        
+                        <!-- 残り秒数表示 -->
+                        <div id="timer-text" class="timer-display text-6xl font-bold text-slate-700 select-none z-10">45</div>
+                        <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mt-1 z-10">Seconds</div>
+                    </div>
+                </div>
             </div>
-            <div class="mt-2 text-center">
-                <label for="csv-file-input" class="text-[10px] text-slate-500 hover:text-teal-400 cursor-pointer transition-colors">
-                    または ローカルCSVファイルをアップロード
-                </label>
-                <input type="file" id="csv-file-input" accept=".csv" class="hidden" />
+
+            <!-- コントロールボタン -->
+            <div>
+                <div class="flex flex-col gap-3">
+                    <button id="action-btn" class="w-full py-3.5 px-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-200 transition-all duration-200 active:scale-[0.98] focus:outline-none">
+                        スタート
+                    </button>
+                    
+                    <button id="reset-btn" class="w-full py-1.5 px-6 text-slate-400 hover:text-slate-600 font-semibold text-xs transition-colors duration-200">
+                        リセット
+                    </button>
+                </div>
+
+                <!-- エラー/ステータス表示メッセージ -->
+                <div id="status-message" class="mt-2 text-xs font-medium text-amber-600 hidden"></div>
             </div>
         </div>
 
-        <!-- 2. スプレッドシート自動転記用のGAS設定（デバッグガイド付き） -->
-        <div class="mb-6 pb-4 border-b border-slate-700/50">
-            <div class="flex justify-between items-center mb-1.5">
-                <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider text-left">スプレッドシート書き出し設定</label>
-                <span id="connection-status" class="text-[10px] text-slate-500">未設定</span>
+        <!-- 右側：計測結果の蓄積・書き出しエリア -->
+        <div class="bg-white p-6 rounded-2xl shadow-xl flex-1 border border-slate-100 flex flex-col justify-between">
+            <div>
+                <!-- クラウド送信先(GAS)の設定 -->
+                <div class="mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-left">
+                    <label class="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-1">
+                        送信先：Google Apps Script (GAS) WebアプリURL
+                    </label>
+                    <input type="url" id="gas-url-input" 
+                        placeholder="https://script.google.com/macros/s/.../exec" 
+                        class="w-full p-2 text-xs rounded-lg border border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono" />
+                    <div class="flex items-center gap-1.5 mt-1.5">
+                        <input type="checkbox" id="auto-send-checkbox" checked class="w-3.5 h-3.5 text-indigo-600 border-indigo-300 rounded focus:ring-indigo-400 cursor-pointer" />
+                        <label for="auto-send-checkbox" class="text-[10px] font-medium text-indigo-800 cursor-pointer">
+                            計測終了時に自動でスプレッドシートに送信
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-bold text-slate-800">計測結果の蓄積</h2>
+                    <span id="record-count" class="bg-slate-100 text-slate-600 text-xs font-semibold px-2.5 py-0.5 rounded-full">0件</span>
+                </div>
+
+                <!-- テーブル表示エリア（スクロール可能） -->
+                <div class="border border-slate-100 rounded-xl overflow-hidden mb-4">
+                    <div class="max-h-40 overflow-y-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="bg-slate-50 text-slate-500 sticky top-0 border-b border-slate-100 z-10">
+                                <tr>
+                                    <th class="p-2.5 font-bold">日時</th>
+                                    <th class="p-2.5 font-bold">記録名</th>
+                                    <th class="p-2.5 font-bold">設定</th>
+                                    <th class="p-2.5 font-bold">結果</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-table-body" class="divide-y divide-slate-100 text-slate-600">
+                                <tr id="no-data-row">
+                                    <td colspan="4" class="p-8 text-center text-slate-400 italic">まだ計測データはありません。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-            <input 
-                type="text" 
-                id="gas-url-input" 
-                placeholder="https://script.google.com/macros/s/.../exec" 
-                class="w-full px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-750 text-slate-200 focus:outline-none focus:border-teal-500 transition-colors"
-            />
-            <p class="text-[10px] text-slate-500 text-left mt-1 leading-relaxed">
-                ※GASの「新しいデプロイ」で取得した「ウェブアプリのURL（末尾が/execのもの）」を入力してください。
-            </p>
+
+            <!-- 出力＆送信アクション -->
+            <div class="pt-4 border-t border-slate-100 space-y-2">
+                <button id="manual-send-btn" disabled class="w-full py-2.5 px-6 bg-slate-300 text-slate-500 font-bold text-xs rounded-xl transition-all duration-200 focus:outline-none cursor-not-allowed">
+                    最新の結果をスプレッドシートへ手動送信
+                </button>
+                <div class="flex justify-between items-center">
+                    <button id="clear-btn" class="text-rose-400 hover:text-rose-600 text-xs font-semibold transition-colors duration-200">
+                        履歴をクリア
+                    </button>
+                    <button id="export-btn" disabled class="text-emerald-500 hover:text-emerald-700 text-xs font-semibold disabled:text-slate-300 disabled:cursor-not-allowed transition-colors duration-200">
+                        ローカルCSV出力
+                    </button>
+                </div>
+            </div>
         </div>
 
-        <!-- 3. タイマータイトル表示 -->
-        <header class="mb-6">
-            <h1 id="timer-title" class="text-3xl font-extrabold tracking-wider bg-gradient-to-r from-teal-400 to-indigo-400 bg-clip-text text-transparent">
-                スタンドアロンタイマー
-            </h1>
-            <p id="timer-subtitle" class="text-xs text-slate-400 mt-2">開始時間: 45.00秒</p>
-        </header>
-
-        <!-- 4. デジタル数字とプログレスリング -->
-        <main class="mb-8 flex flex-col items-center justify-center">
-            <div class="relative w-64 h-64 flex items-center justify-center">
-                <svg class="w-full h-full transform -rotate-90">
-                    <circle cx="128" cy="128" r="110" stroke="currentColor" stroke-width="12" class="text-slate-700" fill="transparent" />
-                    <circle 
-                        id="progress-ring"
-                        cx="128" cy="128" r="110" 
-                        stroke="currentColor" stroke-width="12" 
-                        class="text-teal-400 transition-all duration-100 ease-linear" 
-                        stroke-dasharray="691.15"
-                        stroke-dashoffset="0"
-                        stroke-linecap="round"
-                        fill="transparent" 
-                    />
-                </svg>
-                <div class="absolute flex flex-col items-center justify-center">
-                    <span id="timer-display" class="text-6xl font-mono font-bold tracking-tighter text-slate-50">45.00</span>
-                    <span class="text-xs tracking-widest text-slate-400 uppercase mt-1">Seconds</span>
-                </div>
-            </div>
-        </main>
-
-        <!-- 5. コントロールボタン -->
-        <footer class="flex flex-col gap-4">
-            <div class="flex justify-center gap-4">
-                <button 
-                    id="btn-primary" 
-                    class="flex-1 py-4 px-6 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-all duration-150 flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-slate-900"
-                >
-                    <svg id="icon-play" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <svg id="icon-pause" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <span id="btn-text">スタート</span>
-                </button>
-
-                <button id="btn-reset" class="py-4 px-6 rounded-2xl font-bold text-lg bg-slate-700 hover:bg-slate-600 text-slate-200 active:scale-95 transition-all duration-150">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"></path>
-                    </svg>
-                </button>
-            </div>
-
-            <!-- ステータスメッセージ -->
-            <div id="status-message" class="text-sm text-slate-400 h-6">準備完了</div>
-
-            <!-- 6. 計測結果のCSV出力ボタンエリア -->
-            <div class="pt-4 border-t border-slate-700 flex flex-col gap-2">
-                <div class="text-xs text-slate-400 flex justify-between items-center px-1">
-                    <span>蓄積されたデータ: <strong id="record-count" class="text-teal-400">0</strong> 件</span>
-                    <button id="btn-clear-records" class="text-slate-500 hover:text-rose-400 transition-colors">記録クリア</button>
-                </div>
-                <button 
-                    id="btn-export" 
-                    class="w-full py-2.5 px-4 rounded-xl font-bold text-sm bg-slate-700 hover:bg-slate-600 text-teal-400 border border-teal-500/30 active:scale-98 transition-all flex items-center justify-center gap-2"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                    </svg>
-                    手動でCSVとしてダウンロード
-                </button>
-            </div>
-        </footer>
     </div>
 
-    <script>
-        // --- 設定値の管理 ---
-        let initialTime = 45.0; // 開始時間（秒）
-        let activeTitle = "スタンドアロンタイマー"; // タイマー名
-        const CIRCUMFERENCE = 2 * Math.PI * 110; // プログレスリングの円周
-
-        // --- 状態管理変数 ---
-        let timeLeft = initialTime;
-        let timerInterval = null;
-        let isRunning = false;
-        let lastTimestamp = 0;
-
-        // 計測結果を蓄積する配列（ブラウザ一時保存用）
-        let resultsStorage = []; 
-
-        // --- DOM要素の取得 ---
-        const pageTitle = document.getElementById('page-title');
-        const timerTitle = document.getElementById('timer-title');
-        const timerSubtitle = document.getElementById('timer-subtitle');
-        const timerDisplay = document.getElementById('timer-display');
-        const progressRing = document.getElementById('progress-ring');
-        const btnPrimary = document.getElementById('btn-primary');
-        const btnReset = document.getElementById('btn-reset');
-        const btnText = document.getElementById('btn-text');
-        const iconPlay = document.getElementById('icon-play');
-        const iconPause = document.getElementById('icon-pause');
-        const statusMessage = document.getElementById('status-message');
-        const csvFileInput = document.getElementById('csv-file-input');
-        const csvUrlInput = document.getElementById('csv-url-input');
-        const btnLoadUrl = document.getElementById('btn-load-url');
-        const gasUrlInput = document.getElementById('gas-url-input');
-        const connectionStatus = document.getElementById('connection-status');
+    <!-- 学生向け補足説明 -->
+    <div class="mt-6 bg-white p-6 rounded-2xl shadow-md w-full max-w-4xl border border-slate-100 text-slate-700 text-xs space-y-4">
+        <div>
+            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-1.5 mb-2">
+                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                ステップ6：URLのパラメータ渡しで起動を自動化しよう！
+            </h3>
+            <p class="text-slate-600 mb-2">
+                タイマーを利用するたびに、長い「CSV設定ファイルのURL」や「GAS WebアプリのURL」を手で入力させるのは実用的ではありません。<br>
+                Webアプリの公開URLの末尾に<strong>パラメータ</strong>（Query Parameters）と呼ばれる文字を結合した「特製URL」を作ることで、<strong>アクセスした瞬間に必要な設定を自動的に読み込む仕組み</strong>を作ることができます。
+            </p>
+        </div>
         
-        // 蓄積データ表示・出力
-        const btnExport = document.getElementById('btn-export');
-        const btnClearRecords = document.getElementById('btn-clear-records');
-        const recordCountDisplay = document.getElementById('record-count');
+        <div class="p-4 bg-slate-50 rounded-xl space-y-2 border border-slate-200">
+            <p class="font-bold text-slate-800 text-xs">🛠️ パラメーター付きURLの構造（作り方）</p>
+            <p class="text-slate-600 text-[11px] leading-relaxed">
+                公開されたWebサイトのアドレス（本ページのURL等）の末尾に、<code class="bg-amber-50 text-amber-700 px-1 rounded font-mono font-semibold">?config=設定CSVのURL&gas=GASウェブアプリURL</code> のように繋ぎます。<br>
+                ※URLの中に特殊文字（<code class="font-mono">/</code> や <code class="font-mono">:</code> や <code class="font-mono">?</code>）が含まれるため、パラメータにする値はブラウザが壊れないようにあらかじめ「エンコード（符号化）」しておく必要があります。
+            </p>
+            <div class="bg-slate-900 text-slate-300 p-3 rounded font-mono text-[11px] leading-relaxed overflow-x-auto">
+例：https://[公開URL]/index.html<strong>?config=</strong>https%3A%2F%2Fdocs.google.com%2Fspreadsheets%2Fd%2F...%2Fpub%3Foutput%3Dcsv<strong>&gas=</strong>https%3A%2F%2Fscript.google.com%2Fmacros%2Fs%2F...%2Fexec</div>
+            <p class="text-[10px] text-slate-400 mt-1">
+                ※JavaScript内の <code class="bg-slate-100 text-slate-700 px-1 rounded font-mono">new URLSearchParams(window.location.search)</code> 処理が自動的にこのパラメータを取り出してデコードし、画面上の入力フォームへと瞬時に同期させます。
+            </p>
+        </div>
+    </div>
 
-        // 音声合成（アラーム音）用コンテキスト
-        let audioCtx = null;
+    <!-- JavaScript ロジック -->
+    <script>
+        // デフォルト値
+        let startLimitTime = 45; 
+        let recordName = "実践PJ第6回"; 
+        
+        // 状態管理変数
+        let timeLeft = startLimitTime; 
+        let timerInterval = null;  
+        let isRunning = false;     
 
-        // --- アプリ初期化 ---
-        function init() {
-            // 前回の入力URLが残っていればローカルストレージから復元する（開発時の利便性向上）
-            const savedGasUrl = localStorage.getItem('gas_url_setting');
-            if (savedGasUrl) {
-                gasUrlInput.value = savedGasUrl;
-                updateConnectionStatus(true);
-            }
-            updateDisplay(initialTime);
-            setupEventListeners();
-        }
+        // 計測結果を蓄積する配列
+        let measurementResults = [];
 
-        // --- イベント設定 ---
-        function setupEventListeners() {
-            btnPrimary.addEventListener('click', toggleTimer);
-            btnReset.addEventListener('click', resetTimer);
-            csvFileInput.addEventListener('change', handleFileSelect);
-            btnLoadUrl.addEventListener('click', handleUrlLoad);
-            btnExport.addEventListener('click', exportToCSV);
-            btnClearRecords.addEventListener('click', clearRecords);
+        // HTML要素の取得
+        const recordNameEl = document.getElementById('record-name');
+        const timerTextEl = document.getElementById('timer-text');
+        const actionBtnEl = document.getElementById('action-btn');
+        const resetBtnEl = document.getElementById('reset-btn');
+        const visualRingEl = document.getElementById('visual-ring');
+        const statusMessageEl = document.getElementById('status-message');
+
+        // CSV設定読み込み関連
+        const csvFileInput = document.getElementById('csv-file-input');
+        const webUrlInput = document.getElementById('web-url-input');
+        const webLoadBtn = document.getElementById('web-load-btn');
+        
+        // タブ切り替え
+        const tabWeb = document.getElementById('tab-web');
+        const tabLocal = document.getElementById('tab-local');
+        const panelWeb = document.getElementById('panel-web');
+        const panelLocal = document.getElementById('panel-local');
+
+        // 計測結果の蓄積テーブル関連
+        const resultsTableBody = document.getElementById('results-table-body');
+        const noDataRow = document.getElementById('no-data-row');
+        const recordCountEl = document.getElementById('record-count');
+        const exportBtnEl = document.getElementById('export-btn');
+        const clearBtnEl = document.getElementById('clear-btn');
+
+        // GAS送信関連の要素
+        const gasUrlInput = document.getElementById('gas-url-input');
+        const autoSendCheckbox = document.getElementById('auto-send-checkbox');
+        const manualSendBtn = document.getElementById('manual-send-btn');
+
+        // ------------------------------------------------------------
+        // 【ステップ6新機能】URLパラメータ（GET）の解析と自動ロード処理
+        // ------------------------------------------------------------
+        window.addEventListener('DOMContentLoaded', () => {
+            // URLパラメータを取得するためのオブジェクトを作成
+            const urlParams = new URLSearchParams(window.location.search);
             
-            // GAS用URL入力時の動き
-            gasUrlInput.addEventListener('input', () => {
-                const url = gasUrlInput.value.trim();
-                localStorage.setItem('gas_url_setting', url);
-                updateConnectionStatus(url.length > 0);
-            });
-        }
+            // パラメータ名「config」と「gas」の値を抽出する
+            const configParam = urlParams.get('config');
+            const gasParam = urlParams.get('gas');
 
-        // 接続状態表示の更新
-        function updateConnectionStatus(hasUrl) {
-            if (hasUrl) {
-                connectionStatus.textContent = "🟢 GAS設定あり";
-                connectionStatus.className = "text-[10px] text-teal-400 font-bold";
+            // 1. GAS WebアプリURLの設定
+            // 優先順位：URLパラメータ > ローカルストレージに保存されていた以前のURL
+            if (gasParam) {
+                // デコードして入力欄に適用
+                const decodedGasUrl = decodeURIComponent(gasParam);
+                gasUrlInput.value = decodedGasUrl;
+                localStorage.setItem('timer_gas_url', decodedGasUrl);
+                showMessage("URLパラメータから送信先GASを読み込みました");
             } else {
-                connectionStatus.textContent = "⚪ 未設定 (ローカルのみ)";
-                connectionStatus.className = "text-[10px] text-slate-500";
-            }
-        }
-
-        // Web上のURL（Googleスプレッドシート公開リンクなど）から設定(CSV)を読み込む
-        async function handleUrlLoad() {
-            const url = csvUrlInput.value.trim();
-            if (!url) {
-                showStatus('URLを入力してください。', 'text-rose-400');
-                return;
-            }
-
-            showStatus('読み込み中...', 'text-yellow-400');
-
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error();
-                const csvText = await response.text();
-                parseAndApplyCSV(csvText);
-            } catch (err) {
-                showStatus('読み込みに失敗しました。CORS制限またはURLを確認してください。', 'text-rose-400');
-            }
-        }
-
-        // ローカルファイルの選択
-        function handleFileSelect(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = e => parseAndApplyCSV(e.target.result);
-                reader.readAsText(file, 'UTF-8');
-            }
-        }
-
-        // CSVパース（共通）
-        function parseAndApplyCSV(csvText) {
-            try {
-                const lines = csvText.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-                if (lines.length < 2) {
-                    showStatus('CSVファイルの形式が正しくありません。', 'text-rose-400');
-                    return;
+                const savedGasUrl = localStorage.getItem('timer_gas_url');
+                if (savedGasUrl) {
+                    gasUrlInput.value = savedGasUrl;
                 }
+            }
 
-                const headers = lines[0].split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
-                const values = lines[1].split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
-
-                const timeIndex = headers.indexOf('開始時間');
-                const titleIndex = headers.indexOf('タイトル');
-
-                if (timeIndex === -1 || titleIndex === -1) {
-                    showStatus('ヘッダーに「開始時間」「タイトル」が必要です。', 'text-rose-400');
-                    return;
-                }
-
-                const parsedTime = parseFloat(values[timeIndex]);
-                const parsedTitle = values[titleIndex];
-
-                if (isNaN(parsedTime) || parsedTime <= 0 || !parsedTitle) {
-                    showStatus('不正なデータが含まれています。', 'text-rose-400');
-                    return;
-                }
-
-                initialTime = parsedTime;
-                timeLeft = initialTime;
-                activeTitle = parsedTitle;
-
-                timerTitle.textContent = parsedTitle;
-                pageTitle.textContent = parsedTitle;
-                timerSubtitle.textContent = `開始時間: ${initialTime.toFixed(2)}秒`;
+            // 2. 設定ファイル(CSV) URLの設定および自動取得同期
+            // 優先順位：URLパラメータ > ローカルストレージに保存されていた以前のURL
+            if (configParam) {
+                const decodedConfigUrl = decodeURIComponent(configParam);
+                webUrlInput.value = decodedConfigUrl;
+                localStorage.setItem('timer_web_url', decodedConfigUrl);
                 
-                resetTimer();
-                showStatus(`設定読み込み完了: ${parsedTitle}`, 'text-teal-400');
-            } catch (err) {
-                showStatus('パースエラーが発生しました。', 'text-rose-400');
-            }
-        }
-
-        // 表示の更新（デジタル数字と進捗リング）
-        function updateDisplay(time) {
-            const displayTime = Math.max(0, time);
-            timerDisplay.textContent = displayTime.toFixed(2);
-
-            const progress = displayTime / initialTime;
-            const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
-            progressRing.style.strokeDashoffset = Math.max(0, Math.min(CIRCUMFERENCE, offset));
-
-            if (displayTime <= 10 && displayTime > 0) {
-                progressRing.className = "text-rose-500 transition-all duration-100 ease-linear";
-                timerDisplay.className = "text-6xl font-mono font-bold tracking-tighter text-rose-400 pulse-warning";
+                // 自動的にクラウドからスプレッドシート設定を同期する
+                fetchWebCSV(decodedConfigUrl);
             } else {
-                progressRing.className = "text-teal-400 transition-all duration-100 ease-linear";
-                timerDisplay.className = "text-6xl font-mono font-bold tracking-tighter text-slate-50";
-            }
-        }
-
-        // タイマー動作切り替え
-        function toggleTimer() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (isRunning) {
-                stopTimerAndRecord();
-            } else {
-                startTimer();
-            }
-        }
-
-        // カウントダウン開始
-        function startTimer() {
-            if (timeLeft <= 0) timeLeft = initialTime;
-
-            isRunning = true;
-            lastTimestamp = performance.now();
-            
-            btnText.textContent = '停止（計測終了）';
-            iconPlay.classList.add('hidden');
-            iconPause.classList.remove('hidden');
-            btnPrimary.className = "flex-1 py-4 px-6 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-all duration-150 flex items-center justify-center gap-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white";
-            
-            showStatus('計測中...', 'text-teal-400 font-medium');
-
-            function tick(now) {
-                if (!isRunning) return;
-                const deltaTime = (now - lastTimestamp) / 1000;
-                lastTimestamp = now;
-
-                timeLeft -= deltaTime;
-
-                if (timeLeft <= 0) {
-                    timeLeft = 0;
-                    updateDisplay(timeLeft);
-                    completeTimer();
-                } else {
-                    updateDisplay(timeLeft);
-                    timerInterval = requestAnimationFrame(tick);
+                const savedWebUrl = localStorage.getItem('timer_web_url');
+                if (savedWebUrl) {
+                    webUrlInput.value = savedWebUrl;
                 }
             }
-            timerInterval = requestAnimationFrame(tick);
-        }
+        });
 
-        function stopTimerAndRecord() {
-            isRunning = false;
-            cancelAnimationFrame(timerInterval);
+        // タブ切り替え制御
+        tabWeb.addEventListener('click', () => {
+            tabWeb.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-sm transition-all";
+            tabLocal.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all";
+            panelWeb.classList.remove('hidden');
+            panelLocal.classList.add('hidden');
+        });
 
-            recordResult();
+        tabLocal.addEventListener('click', () => {
+            tabLocal.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-sm transition-all";
+            tabWeb.className = "flex-1 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition-all";
+            panelLocal.classList.remove('hidden');
+            panelWeb.classList.add('hidden');
+        });
 
-            btnText.textContent = 'スタート';
-            iconPlay.classList.remove('hidden');
-            iconPause.classList.add('hidden');
-            btnPrimary.className = "flex-1 py-4 px-6 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-all duration-150 flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-slate-900";
+        // 画面の更新関数
+        function updateDisplay() {
+            timerTextEl.textContent = timeLeft;
             
-            showStatus('計測を終了しました。', 'text-yellow-400');
+            if (timeLeft <= 10 && timeLeft > 0) {
+                timerTextEl.className = "timer-display text-6xl font-bold text-rose-500 select-none z-10 animate-pulse";
+                visualRingEl.className = "absolute inset-0 border-4 border-rose-500 rounded-full transition-all duration-300 scale-95 opacity-40";
+            } else if (timeLeft === 0) {
+                timerTextEl.className = "timer-display text-6xl font-bold text-slate-300 select-none z-10";
+                visualRingEl.className = "absolute inset-0 border-4 border-slate-300 rounded-full transition-all duration-300 scale-95 opacity-20";
+            } else {
+                timerTextEl.className = "timer-display text-6xl font-bold text-slate-700 select-none z-10";
+                if (isRunning) {
+                    visualRingEl.className = "absolute inset-0 border-4 border-emerald-500 rounded-full transition-all duration-300 scale-100 opacity-80 animate-ping";
+                } else {
+                    visualRingEl.className = "absolute inset-0 border-4 border-emerald-500 rounded-full transition-all duration-300 scale-95 opacity-20";
+                }
+            }
         }
 
-        function completeTimer() {
-            isRunning = false;
-            cancelAnimationFrame(timerInterval);
-
-            recordResult();
-
-            btnText.textContent = 'スタート';
-            iconPlay.classList.remove('hidden');
-            iconPause.classList.add('hidden');
-            btnPrimary.className = "flex-1 py-4 px-6 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-all duration-150 flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-slate-900";
-            
-            showStatus('時間になりました！', 'text-rose-400 font-bold');
-            playAlarmSound();
+        // カスタムメッセージ表示
+        function showMessage(text, isError = false) {
+            statusMessageEl.textContent = text;
+            statusMessageEl.className = `mt-2 text-xs font-medium ${isError ? 'text-rose-500' : 'text-emerald-600'}`;
+            statusMessageEl.classList.remove('hidden');
+            setTimeout(() => {
+                statusMessageEl.classList.add('hidden');
+            }, 6000);
         }
 
-        function resetTimer() {
-            isRunning = false;
-            cancelAnimationFrame(timerInterval);
-            timeLeft = initialTime;
-            updateDisplay(timeLeft);
-
-            btnText.textContent = 'スタート';
-            iconPlay.classList.remove('hidden');
-            iconPause.classList.add('hidden');
-            btnPrimary.className = "flex-1 py-4 px-6 rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-all duration-150 flex items-center justify-center gap-2 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-slate-900";
-
-            showStatus('準備完了');
-        }
-
-        // 計測結果の蓄積とGoogleスプレッドシート送信の並列処理
-        function recordResult() {
+        // 現在日時をフォーマット取得
+        function getFormattedDateTime() {
             const now = new Date();
-            const formattedDate = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mi = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return `${yyyy}/${mm}/${dd} ${hh}:${mi}:${ss}`;
+        }
+
+        // カウントダウン処理
+        function countDown() {
+            if (timeLeft > 0) {
+                timeLeft--;
+                updateDisplay();
+            } else {
+                stopTimer(true);
+            }
+        }
+
+        // スタート
+        function startTimer() {
+            isRunning = true;
+            actionBtnEl.textContent = 'ストップ';
+            actionBtnEl.className = "w-full py-3.5 px-6 bg-rose-500 hover:bg-rose-600 text-white font-bold text-lg rounded-xl shadow-lg shadow-rose-200 transition-all duration-200 active:scale-[0.98] focus:outline-none";
             
+            timerInterval = setInterval(countDown, 1000);
+            updateDisplay();
+        }
+
+        // ストップ（計測終了）
+        function stopTimer(isAutoFinish = false) {
+            isRunning = false;
+            actionBtnEl.textContent = 'スタート';
+            actionBtnEl.className = "w-full py-3.5 px-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-200 transition-all duration-200 active:scale-[0.98] focus:outline-none";
+            
+            clearInterval(timerInterval);
+            timerInterval = null;
+            updateDisplay();
+
+            if (timeLeft < startLimitTime || isAutoFinish) {
+                addMeasurementResult(timeLeft);
+            }
+        }
+
+        // 結果データの蓄積とテーブル表示処理
+        function addMeasurementResult(remainingTime) {
+            const dateTimeStr = getFormattedDateTime();
+            const elapsedSeconds = startLimitTime - remainingTime;
+
             const newRecord = {
-                date: formattedDate,
-                title: activeTitle,
-                initial: initialTime.toFixed(2),
-                result: timeLeft.toFixed(2)
+                datetime: dateTimeStr,
+                name: recordName,
+                config: startLimitTime,
+                result: elapsedSeconds
             };
 
-            // 1. ローカル配列にプッシュ
-            resultsStorage.push(newRecord);
-            recordCountDisplay.textContent = resultsStorage.length;
+            measurementResults.unshift(newRecord);
+            renderResultsTable();
 
-            // 2. Google Apps Scriptへのデータ送信
-            sendToGoogleSheet(newRecord);
+            // 自動送信のチェックがON、かつGASのURLが入力されている場合に自動送信
+            const gasUrl = gasUrlInput.value.trim();
+            if (autoSendCheckbox.checked && gasUrl) {
+                sendResultToGAS(newRecord);
+            } else {
+                showMessage(`結果を記録しました：${elapsedSeconds}秒`);
+            }
         }
 
-        // Fetch APIを使用したGASへのPOST送信
-        async function sendToGoogleSheet(record) {
+        // GAS Webアプリへのデータ送信ロジック (POST) - CORSリダイレクト対策
+        async function sendResultToGAS(record) {
             const gasUrl = gasUrlInput.value.trim();
             if (!gasUrl) {
-                showStatus('GASのURLが未設定のためローカルにのみ記録しました。', 'text-slate-400');
+                showMessage("送信失敗: GAS WebアプリURLが入力されていません。", true);
                 return;
             }
 
-            showStatus('スプレッドシートに送信中...', 'text-yellow-400');
+            // 次回用にURLを保存
+            localStorage.setItem('timer_gas_url', gasUrl);
+
+            showMessage("スプレッドシートへ送信中...");
 
             try {
-                // 送信処理（mode: 'no-cors' により、ブラウザの同一生成元ポリシー制限を回避してGASにPOST）
+                // 'mode: no-cors' を指定することで、GASのリダイレクトによるブラウザのCORS判定エラーをバイパスします
                 await fetch(gasUrl, {
                     method: 'POST',
-                    mode: 'no-cors', 
+                    mode: 'no-cors',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'text/plain;charset=utf-8'
                     },
                     body: JSON.stringify(record)
                 });
 
-                showStatus('スプレッドシートへ自動送信完了', 'text-teal-400');
-                
-            } catch (err) {
-                console.error('GAS送信エラー:', err);
-                showStatus('送信エラーが発生しました。接続先を確認してください。', 'text-rose-400');
+                showMessage(`スプレッドシートへの記録要求を送信しました：${record.result}秒`);
+
+            } catch (error) {
+                console.error(error);
+                showMessage(`送信エラー: 送信に失敗しました。GASのURLをもう一度確認してください。`, true);
             }
         }
 
-        // 手動でのCSVエクスポート処理
-        function exportToCSV() {
-            if (resultsStorage.length === 0) {
-                alert("出力する計測記録がありません。");
+        // 蓄積された配列の内容をテーブルに描画する
+        function renderResultsTable() {
+            if (measurementResults.length > 0) {
+                if (noDataRow) noDataRow.classList.add('hidden');
+                exportBtnEl.removeAttribute('disabled');
+                
+                // 手動送信ボタンの活性化
+                manualSendBtn.removeAttribute('disabled');
+                manualSendBtn.className = "w-full py-2.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all duration-200 cursor-pointer";
+            } else {
+                if (noDataRow) noDataRow.classList.remove('hidden');
+                exportBtnEl.setAttribute('disabled', 'true');
+                
+                // 手動送信ボタンの非活性化
+                manualSendBtn.setAttribute('disabled', 'true');
+                manualSendBtn.className = "w-full py-2.5 px-6 bg-slate-300 text-slate-500 font-bold text-xs rounded-xl transition-all duration-200 cursor-not-allowed";
+            }
+
+            recordCountEl.textContent = `${measurementResults.length}件`;
+
+            const rows = resultsTableBody.querySelectorAll('tr:not(#no-data-row)');
+            rows.forEach(row => row.remove());
+
+            measurementResults.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-2.5 border-b border-slate-100 text-[11px] whitespace-nowrap">${item.datetime}</td>
+                    <td class="p-2.5 border-b border-slate-100 font-medium text-slate-800">${item.name}</td>
+                    <td class="p-2.5 border-b border-slate-100 font-mono">${item.config}秒</td>
+                    <td class="p-2.5 border-b border-slate-100 font-mono font-semibold text-emerald-600">${item.result}秒</td>
+                `;
+                resultsTableBody.appendChild(tr);
+            });
+        }
+
+        // 手動送信ボタンのイベント
+        manualSendBtn.addEventListener('click', () => {
+            if (measurementResults.length === 0) return;
+            // 一番最新の結果（配列の最初の要素）を送信
+            sendResultToGAS(measurementResults[0]);
+        });
+
+        // CSV文字列のパース
+        function parseAndApplyCSV(text) {
+            const lines = text.split(/\r?\n/);
+            if (lines.length < 2) {
+                throw new Error("CSVファイルの行数が足りません。");
+            }
+            const headers = lines[0].split(',');
+            if (headers[0].trim() !== '記録名' || headers[1].trim() !== '開始時間') {
+                throw new Error("ヘッダーが「記録名,開始時間」ではありません。");
+            }
+            const data = lines[1].split(',');
+            if (data.length < 2) {
+                throw new Error("2行目のデータ値が不足しています。");
+            }
+            const parsedName = data[0].trim();
+            const parsedTime = parseInt(data[1].trim(), 10);
+
+            if (!parsedName) {
+                throw new Error("記録名が空欄です。");
+            }
+            if (isNaN(parsedTime) || parsedTime <= 0) {
+                throw new Error("開始時間は1以上の半角数字で指定してください。");
+            }
+
+            recordName = parsedName;
+            startLimitTime = parsedTime;
+            
+            stopTimer();
+            timeLeft = startLimitTime;
+
+            recordNameEl.textContent = recordName;
+            updateDisplay();
+        }
+
+        // Web上の公開CSVファイルをfetchして反映する
+        async function fetchWebCSV(url) {
+            if (!url) {
+                showMessage("URLを入力してください。", true);
                 return;
             }
 
-            const headers = ['日時', 'タイトル', '設定(秒)', '結果(秒)'];
-            const rows = resultsStorage.map(item => [
-                item.date,
-                item.title,
-                item.initial,
-                item.result
-            ]);
+            if (url.includes("/file/d/") && url.includes("/view")) {
+                showMessage("エラー: これは通常の共有用URLです。CORSエラー防止のため「ウェブに公開」したCSVのURLを設定してください。", true);
+                return;
+            }
 
-            const allContent = [headers, ...rows];
-            const csvString = "\uFEFF" + allContent.map(fields => 
-                fields.map(val => `"${val.replace(/"/g, '""')}"`).join(",")
-            ).join("\n");
+            localStorage.setItem('timer_web_url', url);
+            webLoadBtn.textContent = "読み込み中...";
+            webLoadBtn.setAttribute('disabled', 'true');
 
-            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTPエラー! ステータス: ${response.status}`);
+                }
+                const csvText = await response.text();
+                parseAndApplyCSV(csvText);
+                showMessage("Webスプレッドシートから設定を同期しました！");
+            } catch (error) {
+                console.error(error);
+                if (error.message.includes('Failed to fetch')) {
+                    showMessage("ネットワークエラー: スプレッドシートが正しく「ウェブに公開」されているか、CORSポリシーに違反していないか確認してください。", true);
+                } else {
+                    showMessage("エラー: " + error.message, true);
+                }
+            } finally {
+                webLoadBtn.textContent = "読み込み";
+                webLoadBtn.removeAttribute('disabled');
+            }
+        }
+
+        webLoadBtn.addEventListener('click', () => {
+            fetchWebCSV(webUrlInput.value.trim());
+        });
+
+        webUrlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                fetchWebCSV(webUrlInput.value.trim());
+            }
+        });
+
+        // ローカルファイルの読み込み
+        csvFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                try {
+                    parseAndApplyCSV(text);
+                    showMessage("ローカルファイルから設定を読み込みました！");
+                } catch (error) {
+                    showMessage("エラー: " + error.message, true);
+                    csvFileInput.value = '';
+                }
+            };
+            reader.readAsText(file, "UTF-8");
+        });
+
+        // CSVデータのエクスポート
+        exportBtnEl.addEventListener('click', () => {
+            if (measurementResults.length === 0) return;
+
+            let csvContent = "日時,記録名,設定(秒),結果(秒)\r\n";
+            const exportData = [...measurementResults].reverse();
+            exportData.forEach(item => {
+                const safeName = `"${item.name.replace(/"/g, '""')}"`;
+                const line = `${item.datetime},${safeName},${item.config},${item.result}\r\n`;
+                csvContent += line;
+            });
+
+            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+            const blob = new Blob([bom, csvContent], { type: "text/csv;charset=utf-8;" });
+
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            
             link.setAttribute("href", url);
-            link.setAttribute("download", `measurement_results.csv`);
+            
+            const now = new Date();
+            const dateStr = now.getFullYear() + 
+                            String(now.getMonth() + 1).padStart(2, '0') + 
+                            String(now.getDate()).padStart(2, '0') + "_" +
+                            String(now.getHours()).padStart(2, '0') +
+                            String(now.getMinutes()).padStart(2, '0');
+            
+            link.setAttribute("download", `timer_results_${dateStr}.csv`);
+            link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
+            
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showMessage("CSVファイルを出力しました！");
+        });
 
-            showStatus('CSVファイルを出力しました！', 'text-teal-400');
-        }
+        // 履歴クリア
+        clearBtnEl.addEventListener('click', () => {
+            if (measurementResults.length === 0) return;
+            measurementResults = [];
+            renderResultsTable();
+            showMessage("記録をすべてクリアしました");
+        });
 
-        // 記録クリア
-        function clearRecords() {
-            if (confirm("これまでの計測記録をすべてクリアしますか？")) {
-                resultsStorage = [];
-                recordCountDisplay.textContent = 0;
-                showStatus('記録を消去しました。');
+        // スタート/ストップボタン
+        actionBtnEl.addEventListener('click', () => {
+            if (isRunning) {
+                stopTimer();
+            } else {
+                if (timeLeft === 0) {
+                    timeLeft = startLimitTime;
+                }
+                startTimer();
             }
-        }
+        });
 
-        // ビープ音
-        function playAlarmSound() {
-            if (!audioCtx) return;
-            try {
-                const playBeep = (delay, duration, frequency) => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(frequency, audioCtx.currentTime + delay);
-                    gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
-                    gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + delay + 0.05);
-                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + duration);
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    osc.start(audioCtx.currentTime + delay);
-                    osc.stop(audioCtx.currentTime + delay + duration);
-                };
-                playBeep(0, 0.2, 880);
-                playBeep(0.3, 0.2, 880);
-                playBeep(0.6, 0.5, 1200);
-            } catch (e) {
-                console.error(e);
-            }
-        }
+        // リセットボタン
+        resetBtnEl.addEventListener('click', () => {
+            stopTimer();
+            timeLeft = startLimitTime;
+            updateDisplay();
+        });
 
-        // ステータス表示の汎用関数
-        function showStatus(message, textClass = 'text-slate-400') {
-            statusMessage.textContent = message;
-            statusMessage.className = `text-sm h-6 ${textClass}`;
-        }
-
-        window.addEventListener('DOMContentLoaded', init);
+        // 初期表示の設定
+        updateDisplay();
     </script>
 </body>
 </html>
