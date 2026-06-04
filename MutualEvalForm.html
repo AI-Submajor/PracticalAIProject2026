@@ -120,7 +120,7 @@
       <section class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100 text-center space-y-6">
         <button type="button" id="btn-submit" class="w-full sm:w-auto text-sm font-bold px-10 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all">評価データを送信（登録）する</button>
         
-        <!-- 送信バックアップ用テキストエリア（送信失敗時や手動提出用、学生名簿等の投入用途ではない純粋な送信控え） -->
+        <!-- 送信バックアップ用テキストエリア -->
         <div id="csv-backup-section" class="hidden border-t pt-6 text-left">
           <button type="button" id="btn-toggle-csv" class="text-xs text-indigo-600 font-bold flex items-center space-x-1">▼ 入力済みCSVデータを確認・コピー（ネットワークエラー時のバックアップ用）</button>
           <div id="csv-backup-area" class="mt-4">
@@ -143,7 +143,6 @@
   </div>
 
   <script>
-    // ダミー・プリセットは不正な評価防止のため完全廃止
     const state = {
       config: { appTitle: '相互評価システム', evaluationType: 'individual', targetDataUrl: '', evaluationItemsUrl: '', gasSubmitUrl: '' },
       targets: [], items: [], selectedMyName: '', selectedMyGroup: '', commonAnswers: {}, evals: {}
@@ -164,10 +163,18 @@
     }
 
     window.onload = async function() {
+      // URLパラメータの解析
       const urlParams = new URLSearchParams(window.location.search);
-      const configUrl = urlParams.get('config');
+      let configUrl = urlParams.get('config');
 
-      // 1. Configパラメータがない場合は起動そのものを停止して厳格エラー
+      // 1. クエリパラメータ内の ? 結合崩れをパッチ (config URL 内の ?output=csv の保護)
+      const href = window.location.href;
+      const configMatch = href.match(/[?&]config=([^&]+)/);
+      if (configMatch) {
+        configUrl = decodeURIComponent(configMatch[1]);
+      }
+
+      // Configパラメータがない場合は起動そのものを停止して厳格エラー
       if (!configUrl) {
         showConfigError("URLパラメータに設定ファイル（?config=...）が指定されていません。\n相互評価用のConfigスプレッドシートURLを指定して実行してください。");
         return;
@@ -246,7 +253,7 @@
         initForm();
 
       } catch (err) {
-        // 設定読み込み時（Config自体のFetch失敗時）のエラーを厳格に捕捉してUIロック
+        // 設定読み込み時のエラーを厳格に捕捉してUIロック
         showConfigError(err.message);
       }
     };
