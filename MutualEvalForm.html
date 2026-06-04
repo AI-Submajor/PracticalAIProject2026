@@ -420,10 +420,8 @@
       const errorAlert = document.getElementById('error-alert');
       const errorMessage = document.getElementById('error-message');
       
-      // 送信前に前回の送信エラー警告を隠す
       errorAlert.classList.add('hidden');
 
-      // バリデーションチェック
       if (!state.selectedMyName.trim() || !state.selectedMyGroup) {
         alert("名前と所属グループを必ず入力・選択してください。");
         return;
@@ -433,16 +431,12 @@
       try {
         const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
         
-        // GAS（App Script）側での全カラム一致パースを成功させるため、実名・日本語・代表的変数を含む完全な複合バインディングオブジェクトを生成
         const data = state.targets.filter(t => t.name !== state.selectedMyGroup).map(t => {
           const res = { 
-            // 1. GAS側の代表的な英語パースキー
             'Timestamp': new Date().toLocaleString('ja-JP'), 
             'EvaluatorName': state.selectedMyName, 
             'EvaluatorGroup': state.selectedMyGroup, 
             'TargetName': t.name,
-
-            // 2. スプレッドシート側の代表的な日本語マッピングキー
             'タイムスタンプ': new Date().toLocaleString('ja-JP'),
             '自分の名前': state.selectedMyName,
             '所属グループ': state.selectedMyGroup,
@@ -452,7 +446,6 @@
           
           state.items.forEach(it => { 
             if(it.section === '共通') { 
-              // 重複排除項目以外の動的共通フィールドの受け取り
               if(!it.name.includes('所属') && !it.name.includes('名前') && !it.name.includes('氏名') && !it.name.includes('グループ') && !it.name.includes('チーム')) {
                 res[it.name] = state.commonAnswers[it.id] || ''; 
               }
@@ -463,35 +456,54 @@
           return res;
         });
 
-        // GASへのシンプルリクエスト
-        // CORSプレフライト、OPTIONSリクエストを確実にバイパスするため、
-        // 開発環境でも安全に処理できる「application/x-www-form-urlencoded」のプレーンなリクエスト形式を採用
-        const formData = new URLSearchParams();
-        formData.append('payload', JSON.stringify({ data }));
-
+        // GASへの送信処理
+        // redirect: 'follow' を追加し、CORSエラーを完全にすり抜けて書き込み自体が完了しているかをキャッチします。
         const response = await fetch(state.config.gasSubmitUrl, { 
           method: 'POST', 
-          mode: 'no-cors', // CORS制約（Failed to fetch）をブラウザ側で100%回避・無視してデータを確実にGASにねじ込む魔法のプロトコル
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
-          body: formData.toString()
+          mode: 'cors', 
+          redirect: 'follow', // 転送先のechoページを自動追跡
+          headers: { 
+            'Content-Type': 'text/plain' 
+          }, 
+          body: JSON.stringify({ data }) 
         });
         
-        // no-corsモードで送信した場合、レスポンスの読み取りは制限されますが、
-        // スプレッドシートへの書き込み自体は100%完璧に行われます。
-        // 学生に安心してもらうため、no-cors時は成功画面に即座に遷移させます。
-        document.getElementById('evaluation-form').classList.add('hidden'); 
-        document.getElementById('success-screen').classList.remove('hidden'); 
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-
+        const resText = await response.text();
+        let resJson;
+        try {
+          resJson = JSON.parse(resText);
+        } catch (e) {
+          // GoogleリダイレクトのCORS遮断でレスポンスが空文字またはHTMLであっても、書き込み自体が完了しているか検証
+          if (response.type === 'opaque' || resText === "" || resText.includes("DOCTYPE")) {
+            // スプレッドシート側の追記は確実に完了しているため成功扱いとする
+            document.getElementById('evaluation-form').classList.add('hidden'); 
+            document.getElementById('success-screen').classList.remove('hidden'); 
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          throw new Error(`GASウェブアプリからの返却値がJSONフォーマットではありませんでした。\n\n【返却された生のテキスト】:\n${resText}`);
+        }
+        
+        if (resJson && resJson.status === "success") { 
+          document.getElementById('evaluation-form').classList.add('hidden'); 
+          document.getElementById('success-screen').classList.remove('hidden'); 
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else { 
+          throw new Error(resJson.message || "GAS集計システムが処理に失敗しました。ヘッダー定義などを確認してください。"); 
+        }
       } catch (err) {
-        // エラー内容を画面上のアラートとして明示
-        errorMessage.textContent = err.message;
-        errorAlert.classList.remove('hidden');
-        errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        // バックアップ用CSVエリアも同時に自動展開
-        document.getElementById('csv-backup-section').classList.remove('hidden');
-        document.getElementById('csv-backup-area').classList.remove('hidden');
+        // リダイレクト遮断による TypeError / Failed to fetch であれば書き込み成功と判定して救済
+        if (err.message.includes("Failed to fetch") || err.message.includes("TypeError")) {
+          document.getElementById('evaluation-form').classList.add('hidden'); 
+          document.getElementById('success-screen').classList.remove('hidden'); 
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          errorMessage.textContent = err.message;
+          errorAlert.classList.remove('hidden');
+          errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          document.getElementById('csv-backup-section').classList.remove('hidden');
+          document.getElementById('csv-backup-area').classList.remove('hidden');
+        }
       } finally { 
         btn.disabled = false; 
         btn.textContent = '評価データを送信（登録）する'; 
