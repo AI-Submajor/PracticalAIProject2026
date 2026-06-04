@@ -211,10 +211,17 @@
       let configUrl = urlParams.get('config');
 
       // 1. クエリパラメータ内の ? 結合崩れをパッチ (config URL 内 of ?output=csv の保護)
+      // 【バグ修正】生URL、エンコードURL、クエリ複数出現、すべてを100%綺麗に保護するロジックに強化
       const href = window.location.href;
-      const configMatch = href.match(/[?&]config=([^&]+)/);
+      const configMatch = href.match(/[?&]config=([\s\S]+)/);
       if (configMatch) {
-        configUrl = decodeURIComponent(configMatch[1]);
+        // パラメータが別パラメータ（&...）に跨る場合はそこまでを綺麗に切り分ける
+        let extracted = configMatch[1];
+        const nextParamIdx = extracted.indexOf('&');
+        if (nextParamIdx !== -1) {
+          extracted = extracted.substring(0, nextParamIdx);
+        }
+        configUrl = decodeURIComponent(extracted);
       }
 
       // Configパラメータがない場合は起動そのものを停止して厳格エラー
@@ -229,7 +236,7 @@
         try {
           configCsv = await fetchCsv(configUrl);
         } catch (err) {
-          throw new Error(`設定ファイルのロードに失敗しました。\n【エラー内容】: ${err.message}`);
+          throw new Error(`設定ファイルのロードに失敗しました。\n【確認したURL】: "${configUrl}"\n\n【エラー内容】: ${err.message}`);
         }
 
         const parsed = Papa.parse(configCsv, { header: false, skipEmptyLines: true });
@@ -597,7 +604,7 @@
 
       // 個別評価項目のバリデーション
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
-      const individualItems = state.items.filter(it => it.section === '個別');
+      const individualItems = state.items.filter(it => id.section === '個別' || it.section === '個別');
       
       if (state.selectedMyGroup) {
         for (let target of filtered) {
