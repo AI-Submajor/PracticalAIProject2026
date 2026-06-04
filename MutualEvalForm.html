@@ -171,6 +171,7 @@
             <p class="text-[11px] text-slate-500 mb-2">送信中にエラーが起きた場合は、以下のテキストをすべてコピーして教員へ提出してください。</p>
             <div class="relative">
               <textarea id="csv-output-textarea" readonly class="w-full h-36 p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] border border-slate-800 rounded-lg outline-none"></textarea>
+              <textarea style="display:none;" id="csv-fallback-trigger"></textarea>
               <button type="button" id="btn-copy-csv" class="absolute bottom-3 right-3 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold px-3 py-1.5 rounded transition">コピー</button>
             </div>
           </div>
@@ -187,7 +188,8 @@
 
   <script>
     const state = {
-      config: { appTitle: '相互評価システム', evaluationType: 'individual', targetDataUrl: '', evaluationItemsUrl: '', gasSubmitUrl: '' },
+      // evaluationType（評価種別）のプロパティ参照は安全に完全削除しました。
+      config: { appTitle: '相互評価システム', targetDataUrl: '', evaluationItemsUrl: '', gasSubmitUrl: '' },
       targets: [], items: [], selectedMyName: '', selectedMyGroup: '', commonAnswers: {}, evals: {},
       excludeTargets: {} // 評価対象外に設定されたカードを管理する {[targetId]: true/false}
     };
@@ -211,11 +213,9 @@
       let configUrl = urlParams.get('config');
 
       // 1. クエリパラメータ内の ? 結合崩れをパッチ (config URL 内 of ?output=csv の保護)
-      // 【バグ修正】生URL、エンコードURL、クエリ複数出現、すべてを100%綺麗に保護するロジックに強化
       const href = window.location.href;
       const configMatch = href.match(/[?&]config=([\s\S]+)/);
       if (configMatch) {
-        // パラメータが別パラメータ（&...）に跨る場合はそこまでを綺麗に切り分ける
         let extracted = configMatch[1];
         const nextParamIdx = extracted.indexOf('&');
         if (nextParamIdx !== -1) {
@@ -261,6 +261,7 @@
           ) {
             state.config.gasSubmitUrl = v;
           }
+          // 古い「評価種別」の割り当てロジックはここから完全に削除しました。
         });
 
         // 必須URLのマッピング検証
@@ -350,7 +351,6 @@
     function initForm() {
       document.getElementById('app-title').textContent = state.config.appTitle;
       
-      // (1) 初期ロード成功時に「初期データを同期しています...」のサブタイトル表記を完全に非表示にする
       const appSubtitle = document.getElementById('app-subtitle');
       if (appSubtitle) {
         appSubtitle.classList.add('hidden');
@@ -371,8 +371,6 @@
         state.evals = {}; 
         state.excludeTargets = {}; 
         renderTargets(); 
-        
-        // 変更時に未入力の赤枠クラスを消す
         select.classList.remove('error-highlight');
       };
 
@@ -387,8 +385,6 @@
       const cont = document.getElementById('dynamic-common-fields');
       cont.innerHTML = '';
       
-      // 共通項目をバインドする際、「名前」や「所属グループ」「氏名」「学籍」「番号」「チーム」などに該当する項目は、
-      // 静的に用意された入力欄と重複するため、動的追加エリアから確実に除外します。
       state.items.filter(it => 
         it.section === '共通' && 
         !it.name.includes('所属') && 
@@ -401,14 +397,12 @@
       ).forEach(it => {
         const div = document.createElement('div');
         div.className = "space-y-2 border-t pt-4";
-        // 共通項目の入力要素に個別IDを割り当て
         div.innerHTML = `<label class="block text-sm font-semibold">${it.name} <span class="text-rose-500">*</span></label>` +
-          (it.type === 'text' ? `<input type="text" id="common-input-${it.id}" oninput="handleCommonInput('${it.id}', this.value)" class="w-full p-3 border rounded-lg text-sm bg-slate-50" />` : '');
+          (it.type === 'text' ? `<input type="text" id="common-input-${it.id}" oninput="handleCommonInput('${it.id}', this.value)" class="w-full p-3 border rounded-lg text-sm bg-slate-50 font-sans outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 transition duration-150" />` : '');
         cont.appendChild(div);
       });
     }
 
-    // 動的共通入力ハンドリング
     window.handleCommonInput = function(itemId, value) {
       state.commonAnswers[itemId] = value;
       const el = document.getElementById(`common-input-${itemId}`);
@@ -416,11 +410,9 @@
       updateCsv();
     };
 
-    // (1) カードを「評価対象外」に設定した際、入力を完全に無視・クリアする
     window.handleExcludeToggle = function(targetId, checked) {
       state.excludeTargets[targetId] = checked;
       
-      // 対象外にチェックされた場合、それまでメモリに入力されていた該当カードの一時データを完全削除（クリア）
       if (checked && state.evals[targetId]) {
         delete state.evals[targetId];
       }
@@ -429,7 +421,6 @@
       if (cardBody) {
         if (checked) {
           cardBody.classList.add('opacity-40', 'pointer-events-none');
-          // 対象外になったら、未記入ハイライト赤枠をすべて取り除く
           const highlights = cardBody.querySelectorAll('.error-highlight');
           highlights.forEach(el => el.classList.remove('error-highlight'));
         } else {
@@ -449,7 +440,6 @@
         const card = document.createElement('div');
         card.className = 'evaluation-card bg-white border border-slate-200 rounded-2xl p-6 space-y-6 shadow-sm';
         
-        // (2) 「評価対象外」チェックボックスのみを配置し、ミスリーディングな「評価対象 #Num」の連番バッジは完全削除
         let html = `
           <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-2 font-sans">
             <div>
@@ -470,7 +460,6 @@
           if (it.type === 'text') {
             html += `<textarea id="input-field-${t.id}-${it.id}" oninput="handleVal('${t.id}','${it.id}',this.value)" class="w-full h-24 p-3 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition duration-150 outline-none" placeholder="${it.name}を入力してください"></textarea>`;
           } else {
-            // ラジオボタン全体を囲むコンテナにIDを設定し、赤枠ハイライトを行えるようにする
             html += `<div id="input-container-${t.id}-${it.id}" class="flex flex-col gap-2 p-1.5 rounded-xl border border-transparent transition duration-150">`;
             it.choices.forEach((ch, ci) => html += `<label id="L-${t.id}-${it.id}-${ci}" class="flex items-center cursor-pointer border border-slate-200 rounded-lg px-4 py-3 text-sm bg-white hover:bg-slate-50"><input type="radio" name="R-${t.id}-${it.id}" onclick="handleRadio('${t.id}','${it.id}','${ch}',${ci},${it.choices.length})" class="mr-3 text-indigo-600 h-4 w-4" /><span>${ch}</span></label>`);
             html += `</div>`;
@@ -493,7 +482,6 @@
       if(!state.evals[tid]) state.evals[tid]={}; 
       state.evals[tid][itid]=v; 
       
-      // 入力されたら即座に赤枠ハイライトを消去する
       const el = document.getElementById(`input-field-${tid}-${itid}`);
       if (el) el.classList.remove('error-highlight');
       
@@ -508,14 +496,12 @@
         document.getElementById(`L-${tid}-${itid}-${i}`).className = (i===ci) ? "flex items-center cursor-pointer border-indigo-600 bg-indigo-50 rounded-lg px-4 py-3 text-xs md:text-sm font-medium transition-all select-none" : "flex items-center cursor-pointer border border-slate-200 rounded-lg px-4 py-3 text-xs md:text-sm font-medium transition-all select-none bg-white hover:bg-slate-50"; 
       }
       
-      // 選択されたらラジオボタンのコンテナ全体の赤枠ハイライトを消去する
       const el = document.getElementById(`input-container-${tid}-${itid}`);
       if (el) el.classList.remove('error-highlight');
       
       updateCsv();
     };
 
-    // 観点選択値の最初の数値(1〜4)のみを抽出・加工するヘルパー関数
     function extractScore(val) {
       if (!val) return '';
       const match = val.match(/^\d+/);
@@ -530,21 +516,18 @@
       
       const rows = [];
       filtered.forEach(t => {
-        // (1) 評価対象外に指定されているカードはレコード（行）自体を完全にスキップして出力しない
         if (state.excludeTargets[t.id]) {
           return;
         }
 
         const row = [ts, state.selectedMyName, state.selectedMyGroup];
         
-        // 共通項目の格納
         state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('学籍')&&!it.name.includes('番号')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).forEach(it=>row.push(state.commonAnswers[it.id]||''));
         
         row.push(t.name);
         
         state.items.filter(it=>it.section==='個別').forEach(it=> {
           const rawVal = state.evals[t.id]?.[it.id] || '';
-          // ラジオボタン数値抽出パッチを適用
           row.push(it.type === 'radio' ? extractScore(rawVal) : rawVal);
         });
         
@@ -561,13 +544,11 @@
       
       errorAlert.classList.add('hidden');
       
-      // 全体の赤枠ハイライトを一旦リセット
       const activeHighlights = document.querySelectorAll('.error-highlight');
       activeHighlights.forEach(el => el.classList.remove('error-highlight'));
 
       let firstEmptyElement = null;
 
-      // 共通基本項目のバリデーション＆赤枠設定
       if (!state.selectedMyName.trim()) {
         const el = document.getElementById('my-name');
         el.classList.add('error-highlight');
@@ -580,7 +561,6 @@
         if (!firstEmptyElement) firstEmptyElement = el;
       }
 
-      // その他動的共通項目のバリデーション
       const commonFields = state.items.filter(it => 
         it.section === '共通' && 
         !it.name.includes('所属') && 
@@ -602,21 +582,17 @@
         }
       });
 
-      // 個別評価項目のバリデーション
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
-      // 【バグ完全解決】 it.section 判定に潜んでいたタイポ「id.section」を「it.section」に完全修正！
       const individualItems = state.items.filter(it => it.section === '個別');
       
       if (state.selectedMyGroup) {
         for (let target of filtered) {
-          // 評価対象外にチェックされているカードはバリデーションを完全に免除（スキップ）
           if (state.excludeTargets[target.id]) {
             continue;
           }
           for (let item of individualItems) {
             const val = state.evals[target.id]?.[item.id];
             if (!val || val.trim() === '') {
-              // 該当する未入力コンポーネントを赤枠ハイライトする
               let el;
               if (item.type === 'text') {
                 el = document.getElementById(`input-field-${target.id}-${item.id}`);
@@ -632,10 +608,8 @@
         }
       }
 
-      // 未記入箇所がある場合、その最初の要素に自動スムーズスクロールしてブロックする
       if (firstEmptyElement) {
         firstEmptyElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // フォーカス可能な要素であればフォーカス
         if (typeof firstEmptyElement.focus === 'function') {
           firstEmptyElement.focus();
         }
@@ -643,7 +617,6 @@
         return;
       }
 
-      // --- 防御ガード：送信先GAS URLが空、または不正な形式の場合は送信そのものをブロック ---
       if (!state.config.gasSubmitUrl || !state.config.gasSubmitUrl.startsWith('http')) {
         errorMessage.textContent = `【設定エラー】GAS送信先URL（結果登録API）がConfigスプレッドシートから正しく読み込めていません。\nConfigファイルの「集計結果」の行のURLを正しく登録されているかご確認ください。\n\n[現在の送信先URL]: "${state.config.gasSubmitUrl || '空っぽ'}"`;
         errorAlert.classList.remove('hidden');
@@ -655,21 +628,17 @@
       try {
         const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('学籍')&&!it.name.includes('番号')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
         
-        // (1) 評価対象外のグループは payload の配列 (data) 自体から完全除外するマッピングロジック
         const data = [];
         filtered.forEach(t => {
           if (state.excludeTargets[t.id]) {
-            return; // 評価対象外チェックがある場合はレコード(行)自体を追加せずスキップ
+            return;
           }
 
           const res = { 
-            // 1. GAS側の代表的な英語パースキー
             'Timestamp': new Date().toLocaleString('ja-JP'), 
             'EvaluatorName': state.selectedMyName, 
             'EvaluatorGroup': state.selectedMyGroup, 
             'TargetName': t.name,
-
-            // 2. スプレッドシート側の代表的な日本語マッピングキー
             'タイムスタンプ': new Date().toLocaleString('ja-JP'),
             '自分の名前': state.selectedMyName,
             '所属グループ': state.selectedMyGroup,
@@ -679,23 +648,21 @@
           
           state.items.forEach(it => { 
             if(it.section === '共通') { 
-              if(!it.name.includes('所属') && !it.name.includes('名前') && !it.name.includes('氏名') && !it.name.includes('学籍') && !it.name.includes('番号') && !it.name.includes('グループ') && !it.name.includes('チーム')) {
+              if(!it.name.includes('所属') && !it.name.includes('名前') && !it.name.includes('氏名') && !it.name.includes('学籍') && !it.name.includes('番号') && !it.name.includes('チーム')) {
                 res[it.name] = state.commonAnswers[it.id] || ''; 
               }
             } else { 
               const rawVal = state.evals[t.id]?.[it.id] || '';
-              // 観点選択値の最初の数値(1〜4)のみを抽出して登録する
               res[it.name] = it.type === 'radio' ? extractScore(rawVal) : rawVal;
             } 
           });
           data.push(res);
         });
 
-        // GASへの送信処理
         const response = await fetch(state.config.gasSubmitUrl, { 
           method: 'POST', 
           mode: 'cors', 
-          redirect: 'follow', // 転送先のechoページを自動追跡
+          redirect: 'follow', 
           headers: { 
             'Content-Type': 'text/plain' 
           }, 
@@ -704,7 +671,6 @@
         
         const resText = await response.text();
         
-        // レスポンスを解析する前にCORS等によるすれ違いがないかキャッチ
         if (response.type === 'opaque' || resText.trim() === "" || resText.includes("DOCTYPE")) {
           document.getElementById('evaluation-form').classList.add('hidden'); 
           document.getElementById('success-screen').classList.remove('hidden'); 
@@ -727,7 +693,6 @@
           throw new Error(resJson.message || "GAS集計システムが処理に失敗しました。ヘッダー定義などを確認してください。"); 
         }
       } catch (err) {
-        // GoogleのCORS一時リダイレクト（TypeError / Failed to fetch）に起因する見かけ上の通信切断であるかを判定して救済
         if (err.message.includes("Failed to fetch") || err.message.includes("TypeError")) {
           document.getElementById('evaluation-form').classList.add('hidden'); 
           document.getElementById('success-screen').classList.remove('hidden'); 
