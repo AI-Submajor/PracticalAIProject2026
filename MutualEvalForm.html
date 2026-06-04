@@ -389,14 +389,23 @@
       try {
         const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
         
-        // GAS（gas-submit.js）側の受け取り期待キーである「Timestamp」,「EvaluatorName」,「EvaluatorGroup」,「TargetName」に
-        // 完全合致するようにマッピング形式を修正
+        // GAS側のすべてのヘッダー判定処理を完璧に通すための「ハイブリッド・データマッピング」
+        // 英語キー(Timestamp等)と日本語キー(タイムスタンプ等)の両方を1つのオブジェクトにブレンドして送り、
+        // スプレッドシート側の「所属グループ」ヘッダーのズレも完全にガードします。
         const data = state.targets.filter(t => t.name !== state.selectedMyGroup).map(t => {
           const res = { 
+            // 1. GAS側の代表的な英語パースキー
             'Timestamp': new Date().toLocaleString('ja-JP'), 
             'EvaluatorName': state.selectedMyName, 
             'EvaluatorGroup': state.selectedMyGroup, 
-            'TargetName': t.name 
+            'TargetName': t.name,
+
+            // 2. スプレッドシート側の各カラムの日本語ヘッダー完全マッチ用
+            'タイムスタンプ': new Date().toLocaleString('ja-JP'),
+            '自分の名前': state.selectedMyName,
+            '所属グループ': state.selectedMyGroup,
+            '自分のグループ': state.selectedMyGroup,
+            '評価対象': t.name
           };
           
           state.items.forEach(it => { 
@@ -412,7 +421,7 @@
           return res;
         });
 
-        // GASウェブアプリへデータを送信（リダイレクトを安全に追跡するパラメータを追加）
+        // GASへのシンプルリクエスト（CORS・OPTIONSプリフライトを100%回避するtext/plain形式）
         const response = await fetch(state.config.gasSubmitUrl, { 
           method: 'POST', 
           mode: 'cors', 
