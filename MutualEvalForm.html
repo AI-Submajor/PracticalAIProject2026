@@ -76,6 +76,23 @@
       <div class="p-3 bg-rose-100 rounded-lg text-[11px] font-mono text-rose-900 border border-rose-200 mt-4 overflow-x-auto" id="data-error-log"></div>
     </div>
 
+    <!-- バリデーション警告表示 -->
+    <div id="validation-error" class="hidden bg-amber-50 border-l-4 border-amber-500 text-amber-950 p-4 rounded-r-xl mb-6 shadow-sm text-sm">
+      <strong>⚠️ 入力漏れがあります: </strong> <span id="validation-error-text"></span>
+    </div>
+
+    <!-- エラー表示エリア（GAS送信失敗時、不整合エラーを学生用画面にも明示するエリア） -->
+    <div id="error-alert" class="hidden bg-rose-50 border-l-4 border-rose-500 text-rose-950 p-5 rounded-r-xl mb-6 shadow-md whitespace-pre-wrap">
+      <div class="flex items-center space-x-2 text-rose-700 font-extrabold mb-2">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <span class="text-sm">データ登録エラー（システム管理者・教員へ不整合ログをお伝えください）</span>
+      </div>
+      <p id="error-message" class="text-xs text-rose-900 font-mono leading-relaxed bg-rose-100/50 p-3 rounded border border-rose-200 mb-3"></p>
+      <p class="text-[11px] text-slate-500">※上記のエラーログをコピーして教員へ提出してください。送信エラー時も入力した評価は下部エリアにCSVとして安全に保護されています。</p>
+    </div>
+
     <!-- メイン入力フォーム -->
     <form id="evaluation-form" class="hidden space-y-8">
       
@@ -167,7 +184,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       let configUrl = urlParams.get('config');
 
-      // 1. クエリパラメータ内の ? 結合崩れをパッチ (config URL 内の ?output=csv の保護)
+      // 1. クエリパラメータ内の ? 結合崩れをパッチ (config URL 内 of ?output=csv の保護)
       const href = window.location.href;
       const configMatch = href.match(/[?&]config=([^&]+)/);
       if (configMatch) {
@@ -378,7 +395,12 @@
 
     async function submitForm() {
       const btn = document.getElementById('btn-submit');
+      const errorAlert = document.getElementById('error-alert');
+      const errorMessage = document.getElementById('error-message');
       
+      // 送信前に前回の送信エラー警告を隠す
+      errorAlert.classList.add('hidden');
+
       // バリデーションチェック
       if (!state.selectedMyName.trim() || !state.selectedMyGroup) {
         alert("名前と所属グループを必ず入力・選択してください。");
@@ -389,9 +411,7 @@
       try {
         const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
         
-        // GAS側のすべてのヘッダー判定処理を完璧に通すための「ハイブリッド・データマッピング」
-        // 英語キー(Timestamp等)と日本語キー(タイムスタンプ等)の両方を1つのオブジェクトにブレンドして送り、
-        // スプレッドシート側の「所属グループ」ヘッダーのズレも完全にガードします。
+        // GAS（App Script）側での全カラム一致パースを成功させるため、実名・日本語・代表的変数を含む完全な複合バインディングオブジェクトを生成
         const data = state.targets.filter(t => t.name !== state.selectedMyGroup).map(t => {
           const res = { 
             // 1. GAS側の代表的な英語パースキー
@@ -400,7 +420,7 @@
             'EvaluatorGroup': state.selectedMyGroup, 
             'TargetName': t.name,
 
-            // 2. スプレッドシート側の各カラムの日本語ヘッダー完全マッチ用
+            // 2. スプレッドシート側の代表的な日本語マッピングキー
             'タイムスタンプ': new Date().toLocaleString('ja-JP'),
             '自分の名前': state.selectedMyName,
             '所属グループ': state.selectedMyGroup,
@@ -431,16 +451,28 @@
         });
         
         const resText = await response.text();
-        const resJson = JSON.parse(resText);
+        let resJson;
+        try {
+          resJson = JSON.parse(resText);
+        } catch (e) {
+          throw new Error(`GASウェブアプリからの返却値がJSONフォーマットではありませんでした。GASのデプロイ時に「アクセスできるユーザー: 全員」に設定されているかご確認ください。\n\n【返却された生のテキスト】:\n${resText}`);
+        }
         
-        if (resJson.status === "success") { 
+        if (resJson && resJson.status === "success") { 
           document.getElementById('evaluation-form').classList.add('hidden'); 
           document.getElementById('success-screen').classList.remove('hidden'); 
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         } else { 
-          throw new Error(resJson.message); 
+          throw new Error(resJson.message || "GAS集計システムが処理に失敗しました。ヘッダー定義などを確認してください。"); 
         }
       } catch (err) {
-        alert("自動送信に失敗しました。下部のCSVをコピーして保存してください。\n\n【失敗の主な原因】:\n・GAS側のデプロイ権限が「全員(匿名含む)」に公開されていない\n・集計スプレッドシートの項目定義ヘッダーが一致していない\n\n【詳細エラー】: " + err.message);
+        // エラー内容を画面上のアラートとして明示
+        errorMessage.textContent = err.message;
+        errorAlert.classList.remove('hidden');
+        errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // バックアップ用CSVエリアも同時に自動展開
+        document.getElementById('csv-backup-section').classList.remove('hidden');
         document.getElementById('csv-backup-area').classList.remove('hidden');
       } finally { 
         btn.disabled = false; 
