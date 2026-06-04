@@ -182,7 +182,6 @@
     <div id="success-screen" class="hidden bg-white shadow-sm rounded-2xl p-10 border border-slate-100 text-center space-y-6 max-w-xl mx-auto">
       <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl font-black">✓</div>
       <h2 class="text-2xl font-black text-slate-900">評価の送信が完了しました</h2>
-      <button type="button" onclick="window.location.reload();" class="text-sm font-bold text-indigo-600 hover:text-indigo-800">新しい入力を始める</button>
     </div>
   </div>
 
@@ -343,6 +342,13 @@
 
     function initForm() {
       document.getElementById('app-title').textContent = state.config.appTitle;
+      
+      // (1) 初期ロード成功時に「初期データを同期しています...」のサブタイトル表記を完全に非表示にする
+      const appSubtitle = document.getElementById('app-subtitle');
+      if (appSubtitle) {
+        appSubtitle.classList.add('hidden');
+      }
+
       const select = document.getElementById('my-group');
       select.innerHTML = '<option value="">-- 所属を選択してください --</option>';
       state.targets.forEach(t => {
@@ -390,7 +396,7 @@
         div.className = "space-y-2 border-t pt-4";
         // 共通項目の入力要素に個別IDを割り当て
         div.innerHTML = `<label class="block text-sm font-semibold">${it.name} <span class="text-rose-500">*</span></label>` +
-          (it.type === 'text' ? `<input type="text" id="common-input-${it.id}" oninput="handleCommonInput('${it.id}', this.value)" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition duration-150 outline-none" />` : '');
+          (it.type === 'text' ? `<input type="text" id="common-input-${it.id}" oninput="handleCommonInput('${it.id}', this.value)" class="w-full p-3 border rounded-lg text-sm bg-slate-50" />` : '');
         cont.appendChild(div);
       });
     }
@@ -430,7 +436,7 @@
       const cont = document.getElementById('evaluation-targets');
       cont.innerHTML = '';
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
-      if (!state.selectedMyGroup) { cont.innerHTML = `<div class="text-center py-12 text-amber-600 bg-amber-50/50 rounded-xl border border-dashed border-amber-200">STEP 1 で所属グループを選択してください。</div>`; return; }
+      if (!state.selectedMyGroup) { cont.innerHTML = `<div class="text-center py-12 text-amber-600 bg-amber-50/50 rounded-xl border border-dashed border-amber-200 text-sm">STEP 1 で所属グループを選択してください。</div>`; return; }
       document.getElementById('csv-backup-section').classList.remove('hidden');
       filtered.forEach((t, i) => {
         const card = document.createElement('div');
