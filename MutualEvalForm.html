@@ -46,7 +46,7 @@
         <div class="bg-white/80 p-4 rounded-lg border border-rose-200 space-y-1 text-slate-700">
           <p class="font-bold text-rose-800 text-xs">🛠️ 管理者・教員向けチェックリスト：</p>
           <ul class="list-disc pl-5 space-y-1 text-xs">
-            <li>アドレスバー of URLパラメータ（<code>?config=...</code>）で指定した公開URLが正しいか確認してください。</li>
+            <li>アドレスバーのURLパラメータ（<code>?config=...</code>）で指定した公開URLが正しいか確認してください。</li>
             <li>設定元のスプレッドシートが「Webに公開」から<strong>「カンマ区切り値(.csv)」</strong>形式で一般公開されているか確認してください。</li>
           </ul>
         </div>
@@ -60,7 +60,7 @@
         <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
         </svg>
-        <h3 class="font-extrabold text-base md:text-lg">評価対象 data（名簿・評価項目）の読み込みに失敗しました</h3>
+        <h3 class="font-extrabold text-base md:text-lg">評価対象データ（名簿・評価項目）の読み込みに失敗しました</h3>
       </div>
       <div class="text-xs md:text-sm leading-relaxed space-y-2 text-rose-900">
         <p>
@@ -90,7 +90,14 @@
         <span class="text-sm">データ登録エラー（システム管理者・教員へ不整合ログをお伝えください）</span>
       </div>
       <p id="error-message" class="text-xs text-rose-900 font-mono leading-relaxed bg-rose-100/50 p-3 rounded border border-rose-200 mb-3"></p>
-      <p class="text-[11px] text-slate-500">※上記のエラーログをコピーして教員へ提出してください。送信エラー時も入力した評価は下部エリアにCSVとして安全に保護されています。</p>
+      <div class="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-900 space-y-2">
+        <p class="font-bold">💡 【管理者様への技術的アドバイス】</p>
+        <p>Google側のエラーログ「現在、ファイルを開くことができません」は、GASから送信先スプレッドシートへのアクセス権限がない場合に生じます。以下の点をご確認ください。</p>
+        <ul class="list-disc pl-5 space-y-1 text-[11px] text-amber-950">
+          <li>GASスクリプトが、集計用スプレッドシートの<strong>「拡張機能」 ＞ 「Apps Script」</strong>から作成した「コンテナバインドスクリプト」であることを確認してください。</li>
+          <li>GASプログラムをデプロイする際、<strong>「次のユーザーとして実行: 自分（教員アカウント）」</strong>、<strong>「アクセスできるユーザー: 全員」</strong>で新しくデプロイし、新デプロイIDをConfigに貼り付け直してください。</li>
+        </ul>
+      </div>
     </div>
 
     <!-- メイン入力フォーム -->
