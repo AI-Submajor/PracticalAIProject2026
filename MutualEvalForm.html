@@ -104,11 +104,11 @@
             GASプログラムを変更した際、単に「デプロイ」を押すだけでは反映されません。必ず<strong>「デプロイの管理」 ＞ 「編集（鉛筆アイコン）」 ＞ 「バージョン: 新しいバージョン」</strong>を選択し、デプロイをし直してください。これを行わないとCORS制限エラーで遮断され続けます。
           </li>
           <li>
-            <strong>実行設定の確認:</strong><br>
+            <strong>実行設定 of GAS:</strong><br>
             「次のユーザーとして実行」が <strong>「自分（教員アカウント）」</strong>、「アクセスできるユーザー」が <strong>「全員（Anyone）」</strong> になっていることを確認してください。
           </li>
           <li>
-            <strong>URLパラメータの確認:</strong><br>
+            <strong>Config設定シートの確認:</strong><br>
             Configスプレッドシート（設定シート）に書き込んでいる「集計結果」のURLが、現在指定している <code>.../exec</code> で終わるものと完全一致しているか確認してください。
           </li>
         </ol>
@@ -233,10 +233,24 @@
         parsed.data.forEach((row, i) => {
           if (i === 0) return;
           const k = row[0]?.trim(), v = row[1]?.trim();
-          if (k.includes('タイトル')) state.config.appTitle = v;
-          else if (k.includes('項目')) state.config.evaluationItemsUrl = v;
-          else if (k.includes('対象')) state.config.targetDataUrl = v;
-          else if (k.includes('API') || v.includes('/macros/s/')) state.config.gasSubmitUrl = v;
+          
+          // --- 送信先GAS URLの抽出判定を大幅に強化 ---
+          if (k.includes('タイトル')) {
+            state.config.appTitle = v;
+          } else if (k.includes('項目') || k.includes('定義')) {
+            state.config.evaluationItemsUrl = v;
+          } else if (k.includes('対象') || k.includes('名簿')) {
+            state.config.targetDataUrl = v;
+          } else if (
+            k.includes('結果') || 
+            k.includes('送信') || 
+            k.includes('API') || 
+            k.includes('URL') || 
+            k.includes('集計') || 
+            v.includes('/macros/s/')
+          ) {
+            state.config.gasSubmitUrl = v;
+          }
         });
 
         // 必須URLのマッピング検証
@@ -422,8 +436,17 @@
       
       errorAlert.classList.add('hidden');
 
+      // バリデーションチェック (名前、グループが空の場合は送信不可)
       if (!state.selectedMyName.trim() || !state.selectedMyGroup) {
         alert("名前と所属グループを必ず入力・選択してください。");
+        return;
+      }
+
+      // --- 防御ガード：送信先GAS URLが空、または不正な形式の場合は送信そのものをブロック ---
+      if (!state.config.gasSubmitUrl || !state.config.gasSubmitUrl.startsWith('http')) {
+        errorMessage.textContent = `【設定エラー】GAS送信先URL（結果登録API）がConfigスプレッドシートから正しく読み込めていません。\nConfigファイルの「集計結果」の行のURLを正しく登録されているかご確認ください。\n\n[現在の送信先URL]: "${state.config.gasSubmitUrl || '空っぽ'}"`;
+        errorAlert.classList.remove('hidden');
+        errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
@@ -433,10 +456,13 @@
         
         const data = state.targets.filter(t => t.name !== state.selectedMyGroup).map(t => {
           const res = { 
+            // 1. GAS側の代表的な英語パースキー
             'Timestamp': new Date().toLocaleString('ja-JP'), 
             'EvaluatorName': state.selectedMyName, 
             'EvaluatorGroup': state.selectedMyGroup, 
             'TargetName': t.name,
+
+            // 2. スプレッドシート側の代表的な日本語マッピングキー
             'タイムスタンプ': new Date().toLocaleString('ja-JP'),
             '自分の名前': state.selectedMyName,
             '所属グループ': state.selectedMyGroup,
@@ -457,7 +483,6 @@
         });
 
         // GASへの送信処理
-        // redirect: 'follow' を追加し、CORSエラーを完全にすり抜けて書き込み自体が完了しているかをキャッチします。
         const response = await fetch(state.config.gasSubmitUrl, { 
           method: 'POST', 
           mode: 'cors', 
