@@ -85,7 +85,7 @@
 
     <!-- バリデーション警告表示 -->
     <div id="validation-error" class="hidden bg-amber-50 border-l-4 border-amber-500 text-amber-950 p-4 rounded-r-xl mb-6 shadow-sm text-sm">
-      <strong>⚠️ 入力漏れがあります: </strong> <span id="validation-error-text font-semibold"></span>
+      <strong>⚠️ 入力漏れがあります: </strong> <span id="validation-error-text" class="font-semibold"></span>
     </div>
 
     <!-- エラー表示エリア（GAS送信失敗時、詳細な診断メッセージを学生にも表示） -->
@@ -207,15 +207,18 @@
     }
 
     window.onload = async function() {
+      // URLパラメータの解析
       const urlParams = new URLSearchParams(window.location.search);
       let configUrl = urlParams.get('config');
 
+      // 1. クエリパラメータ内の ? 結合崩れをパッチ (config URL 内 of ?output=csv の保護)
       const href = window.location.href;
       const configMatch = href.match(/[?&]config=([^&]+)/);
       if (configMatch) {
         configUrl = decodeURIComponent(configMatch[1]);
       }
 
+      // Configパラメータがない場合は起動そのものを停止して厳格エラー
       if (!configUrl) {
         showConfigError("URLパラメータに設定ファイル（?config=...）が指定されていません。\n相互評価用のConfigスプレッドシートURLを指定して実行してください。");
         return;
@@ -235,6 +238,7 @@
           if (i === 0) return;
           const k = row[0]?.trim(), v = row[1]?.trim();
           
+          // --- 送信先GAS URLの抽出判定を大幅に強化 ---
           if (k.includes('タイトル')) {
             state.config.appTitle = v;
           } else if (k.includes('項目') || k.includes('定義')) {
@@ -253,6 +257,7 @@
           }
         });
 
+        // 必須URLのマッピング検証
         if (!state.config.targetDataUrl || !state.config.evaluationItemsUrl) {
           throw new Error("読み込んだ設定ファイルの中に「対象（名簿URL）」または「項目定義（項目URL）」の設定項目が見つかりません。");
         }
@@ -310,6 +315,7 @@
       document.getElementById('loader-notice-text').textContent = msg;
     }
 
+    // Configロード失敗時（致命的）
     function showConfigError(log) {
       document.getElementById('connection-indicator').textContent = "Configエラー";
       document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
@@ -322,6 +328,7 @@
       document.getElementById('evaluation-form').classList.add('hidden');
     }
 
+    // 名簿・評価項目読込失敗時
     function showDataError(log) {
       document.getElementById('connection-indicator').textContent = "データロードエラー";
       document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
@@ -345,6 +352,7 @@
         select.appendChild(optionEl);
       });
 
+      // ドロップダウン選択の変更検知イベントをバインド
       select.onchange = function(e) {
         state.selectedMyGroup = e.target.value;
         state.evals = {}; 
@@ -395,7 +403,7 @@
       updateCsv();
     };
 
-    // (1) カードを「評価対象外」に設定した際、入力を完全に無視・クリアするパッチ
+    // (1) カードを「評価対象外」に設定した際、入力を完全に無視・クリアする
     window.handleExcludeToggle = function(targetId, checked) {
       state.excludeTargets[targetId] = checked;
       
@@ -422,13 +430,13 @@
       const cont = document.getElementById('evaluation-targets');
       cont.innerHTML = '';
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
-      if (!state.selectedMyGroup) { cont.innerHTML = `<div class="text-center py-12 text-amber-600 bg-amber-50 rounded-xl border border-dashed border-amber-200">STEP 1 で所属グループを選択してください。</div>`; return; }
+      if (!state.selectedMyGroup) { cont.innerHTML = `<div class="text-center py-12 text-amber-600 bg-amber-50/50 rounded-xl border border-dashed border-amber-200">STEP 1 で所属グループを選択してください。</div>`; return; }
       document.getElementById('csv-backup-section').classList.remove('hidden');
       filtered.forEach((t, i) => {
         const card = document.createElement('div');
         card.className = 'evaluation-card bg-white border border-slate-200 rounded-2xl p-6 space-y-6 shadow-sm';
         
-        // 評価対象外のチェックボックスを追加
+        // (2) 「評価対象外」チェックボックスのみを配置し、ミスリーディングな「評価対象 #Num」の連番バッジは完全削除
         let html = `
           <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-2 font-sans">
             <div>
@@ -439,7 +447,6 @@
                 <input type="checkbox" onchange="handleExcludeToggle('${t.id}', this.checked)" class="mr-1.5 h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500" />
                 <span>評価対象外</span>
               </label>
-              <span class="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">評価対象 #${i+1}</span>
             </div>
           </div>
           <div class="space-y-5 pt-2 transition-all duration-200" id="card-body-${t.id}">
@@ -507,7 +514,14 @@
       const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('学籍')&&!it.name.includes('番号')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
       const ts = new Date().toLocaleString('ja-JP');
-      const rows = filtered.map(t => {
+      
+      const rows = [];
+      filtered.forEach(t => {
+        // (1) 評価対象外に指定されているカードはレコード（行）自体を完全にスキップして出力しない
+        if (state.excludeTargets[t.id]) {
+          return;
+        }
+
         const row = [ts, state.selectedMyName, state.selectedMyGroup];
         
         // 共通項目の格納
@@ -515,19 +529,15 @@
         
         row.push(t.name);
         
-        // 評価対象外に指定されているカードはすべて空文字列で出力
-        const isExcluded = state.excludeTargets[t.id];
         state.items.filter(it=>it.section==='個別').forEach(it=> {
-          if (isExcluded) {
-            row.push('');
-          } else {
-            const rawVal = state.evals[t.id]?.[it.id] || '';
-            // (1) ラジオボタン数値抽出パッチをCSV生成時にも適用
-            row.push(it.type === 'radio' ? extractScore(rawVal) : rawVal);
-          }
+          const rawVal = state.evals[t.id]?.[it.id] || '';
+          // ラジオボタン数値抽出パッチを適用
+          row.push(it.type === 'radio' ? extractScore(rawVal) : rawVal);
         });
-        return row.map(v => `"${(v+'').replace(/"/g,'""')}"`).join(',');
+        
+        rows.push(row.map(v => `"${(v+'').replace(/"/g,'""')}"`).join(','));
       });
+      
       document.getElementById('csv-output-textarea').value = [headers.join(','), ...rows].join('\n');
     }
 
@@ -585,7 +595,7 @@
       
       if (state.selectedMyGroup) {
         for (let target of filtered) {
-          // (2) 評価対象外にチェックされているカードはバリデーションを完全に免除（スキップ）
+          // 評価対象外にチェックされているカードはバリデーションを完全に免除（スキップ）
           if (state.excludeTargets[target.id]) {
             continue;
           }
@@ -608,7 +618,7 @@
         }
       }
 
-      // (3) 未記入箇所がある場合、その最初の要素に自動スムーズスクロールしてブロックする
+      // 未記入箇所がある場合、その最初の要素に自動スムーズスクロールしてブロックする
       if (firstEmptyElement) {
         firstEmptyElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         // フォーカス可能な要素であればフォーカス
@@ -631,8 +641,13 @@
       try {
         const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('学籍')&&!it.name.includes('番号')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
         
-        const data = filtered.map(t => {
-          const isExcluded = state.excludeTargets[t.id];
+        // (1) 評価対象外のグループは payload の配列 (data) 自体から完全除外するマッピングロジック
+        const data = [];
+        filtered.forEach(t => {
+          if (state.excludeTargets[t.id]) {
+            return; // 評価対象外チェックがある場合はレコード(行)自体を追加せずスキップ
+          }
+
           const res = { 
             // 1. GAS側の代表的な英語パースキー
             'Timestamp': new Date().toLocaleString('ja-JP'), 
@@ -654,17 +669,12 @@
                 res[it.name] = state.commonAnswers[it.id] || ''; 
               }
             } else { 
-              if (isExcluded) {
-                // (2) 評価対象外の場合は空文字列
-                res[it.name] = '';
-              } else {
-                const rawVal = state.evals[t.id]?.[it.id] || '';
-                // (1) 観点選択値の最初の数値(1〜4)のみを抽出して登録するマッピング処理
-                res[it.name] = it.type === 'radio' ? extractScore(rawVal) : rawVal;
-              }
+              const rawVal = state.evals[t.id]?.[it.id] || '';
+              // 観点選択値の最初の数値(1〜4)のみを抽出して登録する
+              res[it.name] = it.type === 'radio' ? extractScore(rawVal) : rawVal;
             } 
           });
-          return res;
+          data.push(res);
         });
 
         // GASへの送信処理
@@ -680,9 +690,8 @@
         
         const resText = await response.text();
         
-        // 【最重要修正】レスポンスを解析する前にCORS等によるすれ違いがないかキャッチ
+        // レスポンスを解析する前にCORS等によるすれ違いがないかキャッチ
         if (response.type === 'opaque' || resText.trim() === "" || resText.includes("DOCTYPE")) {
-          // (3) スプレッドシート側の追記は確実に完了しているため、正常完了画面へ進める
           document.getElementById('evaluation-form').classList.add('hidden'); 
           document.getElementById('success-screen').classList.remove('hidden'); 
           window.scrollTo({ top: 0, behavior: 'smooth' });
