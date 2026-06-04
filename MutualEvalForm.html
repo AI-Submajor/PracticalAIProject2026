@@ -6,6 +6,13 @@
   <title>相互評価ツール 2026</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    /* 未入力ハイライト時のトランジション効果 */
+    .error-highlight {
+      border-color: #f43f5e !important;
+      box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.15) !important;
+    }
+  </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-800 pb-16 font-sans">
 
@@ -78,7 +85,7 @@
 
     <!-- バリデーション警告表示 -->
     <div id="validation-error" class="hidden bg-amber-50 border-l-4 border-amber-500 text-amber-950 p-4 rounded-r-xl mb-6 shadow-sm text-sm">
-      <strong>⚠️ 入力漏れがあります: </strong> <span id="validation-error-text"></span>
+      <strong>⚠️ 入力漏れがあります: </strong> <span id="validation-error-text font-semibold"></span>
     </div>
 
     <!-- エラー表示エリア（GAS送信失敗時、詳細な診断メッセージを学生にも表示） -->
@@ -122,15 +129,17 @@
         </h2>
         
         <div class="space-y-5">
+          <!-- あなたの名前 ➔ 名前または学籍番号 -->
           <div class="space-y-2">
-            <label class="block text-sm font-semibold text-slate-700">あなたの名前（自由記述） <span class="text-rose-500">*</span></label>
-            <input type="text" id="my-name" oninput="handleMyNameInput(this.value)" class="w-full p-3 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="氏名を入力（例：人工知能 太郎）" />
+            <label class="block text-sm font-semibold text-slate-700">名前または学籍番号 <span class="text-rose-500">*</span></label>
+            <input type="text" id="my-name" oninput="handleMyNameInput(this.value)" class="w-full p-3 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition duration-150" placeholder="氏名または学籍番号を入力（例：B2699999 山田太郎）" />
           </div>
 
+          <!-- 所属グループ ➔ 所属グループまたは自分の名前 -->
           <div class="space-y-2">
-            <label class="block text-sm font-semibold text-slate-700">あなたの所属グループ（自分のチーム） <span class="text-rose-500">*</span></label>
-            <select id="my-group" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
-              <option value="">-- グループを選択してください --</option>
+            <label class="block text-sm font-semibold text-slate-700">所属グループまたは自分の名前 <span class="text-rose-500">*</span></label>
+            <select id="my-group" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 transition duration-150 outline-none">
+              <option value="">-- 所属を選択してください --</option>
             </select>
           </div>
 
@@ -191,7 +200,6 @@
       const text = await response.text();
       
       const clean = text.trim();
-      // Google側で未公開（アクセス制限中）または404の場合、HTMLコードが返されるためパースさせずにブロックする
       if (clean.startsWith('<!DOCTYPE') || clean.startsWith('<html') || clean.startsWith('<xml')) {
         throw new Error(`Google側がCSVではなくHTML(ログイン画面や404エラーページ)を返却しました。シートが一般の「Webに公開(CSV)」に設定されているかご確認ください。\nURL: ${url}`);
       }
@@ -199,25 +207,21 @@
     }
 
     window.onload = async function() {
-      // URLパラメータの解析
       const urlParams = new URLSearchParams(window.location.search);
       let configUrl = urlParams.get('config');
 
-      // 1. クエリパラメータ内の ? 結合崩れをパッチ (config URL 内 of ?output=csv の保護)
       const href = window.location.href;
       const configMatch = href.match(/[?&]config=([^&]+)/);
       if (configMatch) {
         configUrl = decodeURIComponent(configMatch[1]);
       }
 
-      // Configパラメータがない場合は起動そのものを停止して厳格エラー
       if (!configUrl) {
         showConfigError("URLパラメータに設定ファイル（?config=...）が指定されていません。\n相互評価用のConfigスプレッドシートURLを指定して実行してください。");
         return;
       }
 
       try {
-        // 2. Configファイルを読み込む
         updateNoticeStatus('設定ファイル（Config）を読み込んでいます...');
         let configCsv;
         try {
@@ -231,7 +235,6 @@
           if (i === 0) return;
           const k = row[0]?.trim(), v = row[1]?.trim();
           
-          // --- 送信先GAS URLの抽出判定を大幅に強化 ---
           if (k.includes('タイトル')) {
             state.config.appTitle = v;
           } else if (k.includes('項目') || k.includes('定義')) {
@@ -250,12 +253,10 @@
           }
         });
 
-        // 必須URLのマッピング検証
         if (!state.config.targetDataUrl || !state.config.evaluationItemsUrl) {
           throw new Error("読み込んだ設定ファイルの中に「対象（名簿URL）」または「項目定義（項目URL）」の設定項目が見つかりません。");
         }
 
-        // 3. 評価対象(名簿)をロード
         updateNoticeStatus('評価対象（名簿リスト）を同期しています...');
         let targetCsv;
         try {
@@ -277,7 +278,6 @@
           return;
         }
 
-        // 4. 評価項目定義をロード
         updateNoticeStatus('評価項目定義を同期しています...');
         let itemsCsv;
         try {
@@ -295,7 +295,6 @@
           if (row[1]) state.items.push({ id: `item-${i}`, section, name: row[1].trim(), desc: row[3] || '', type, choices: type === 'radio' ? ["4：とてもそう思う", "3：どちらかというとそう思う", "2：どちらかというとそう思わない", "1：そう思わない"] : [] });
         });
 
-        // すべての同期が完了したらフォームを安全に展開
         document.getElementById('connection-indicator').textContent = "ONLINE 同期";
         document.getElementById('connection-indicator').className = "bg-green-800 px-3 py-1 rounded text-white font-mono";
         document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
@@ -303,7 +302,6 @@
         initForm();
 
       } catch (err) {
-        // 設定読み込み時のエラーを厳格に捕捉してUIロック
         showConfigError(err.message);
       }
     };
@@ -312,7 +310,6 @@
       document.getElementById('loader-notice-text').textContent = msg;
     }
 
-    // Configロード失敗時（致命的）
     function showConfigError(log) {
       document.getElementById('connection-indicator').textContent = "Configエラー";
       document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
@@ -325,7 +322,6 @@
       document.getElementById('evaluation-form').classList.add('hidden');
     }
 
-    // 名簿・評価項目読込失敗時
     function showDataError(log) {
       document.getElementById('connection-indicator').textContent = "データロードエラー";
       document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
@@ -341,7 +337,7 @@
     function initForm() {
       document.getElementById('app-title').textContent = state.config.appTitle;
       const select = document.getElementById('my-group');
-      select.innerHTML = '<option value="">-- グループを選択してください --</option>';
+      select.innerHTML = '<option value="">-- 所属を選択してください --</option>';
       state.targets.forEach(t => {
         const optionEl = document.createElement('option');
         optionEl.value = t.name; 
@@ -349,12 +345,14 @@
         select.appendChild(optionEl);
       });
 
-      // --- 【最重要修正】ドロップダウン選択の変更検知イベントを確実にバインド ---
       select.onchange = function(e) {
         state.selectedMyGroup = e.target.value;
         state.evals = {}; 
         state.excludeTargets = {}; 
-        renderTargets(); // ターゲットカード群（チェックボックス付き）を再レンダリングする
+        renderTargets(); 
+        
+        // 変更時に未入力の赤枠クラスを消す
+        select.classList.remove('error-highlight');
       };
 
       document.getElementById('evaluation-form').classList.remove('hidden');
@@ -368,7 +366,7 @@
       const cont = document.getElementById('dynamic-common-fields');
       cont.innerHTML = '';
       
-      // 共通項目をバインドする際、「名前」や「所属グループ」「氏名」などに該当する項目は、
+      // 共通項目をバインドする際、「名前」や「所属グループ」「氏名」「学籍」「番号」「チーム」などに該当する項目は、
       // 静的に用意された入力欄と重複するため、動的追加エリアから確実に除外します。
       state.items.filter(it => 
         it.section === '共通' && 
@@ -376,23 +374,43 @@
         !it.name.includes('グループ') && 
         !it.name.includes('名前') && 
         !it.name.includes('氏名') && 
+        !it.name.includes('学籍') && 
+        !it.name.includes('番号') && 
         !it.name.includes('チーム')
       ).forEach(it => {
         const div = document.createElement('div');
         div.className = "space-y-2 border-t pt-4";
+        // 共通項目の入力要素に個別IDを割り当て
         div.innerHTML = `<label class="block text-sm font-semibold">${it.name} <span class="text-rose-500">*</span></label>` +
-          (it.type === 'text' ? `<input type="text" oninput="state.commonAnswers['${it.id}']=this.value;updateCsv();" class="w-full p-3 border rounded-lg text-sm bg-slate-50" />` : '');
+          (it.type === 'text' ? `<input type="text" id="common-input-${it.id}" oninput="handleCommonInput('${it.id}', this.value)" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition duration-150 outline-none" />` : '');
         cont.appendChild(div);
       });
     }
 
-    // カードを「評価対象外」に設定するスイッチのハンドリング
+    // 動的共通入力ハンドリング
+    window.handleCommonInput = function(itemId, value) {
+      state.commonAnswers[itemId] = value;
+      const el = document.getElementById(`common-input-${itemId}`);
+      if (el) el.classList.remove('error-highlight');
+      updateCsv();
+    };
+
+    // (1) カードを「評価対象外」に設定した際、入力を完全に無視・クリアするパッチ
     window.handleExcludeToggle = function(targetId, checked) {
       state.excludeTargets[targetId] = checked;
+      
+      // 対象外にチェックされた場合、それまでメモリに入力されていた該当カードの一時データを完全削除（クリア）
+      if (checked && state.evals[targetId]) {
+        delete state.evals[targetId];
+      }
+
       const cardBody = document.getElementById(`card-body-${targetId}`);
       if (cardBody) {
         if (checked) {
           cardBody.classList.add('opacity-40', 'pointer-events-none');
+          // 対象外になったら、未記入ハイライト赤枠をすべて取り除く
+          const highlights = cardBody.querySelectorAll('.error-highlight');
+          highlights.forEach(el => el.classList.remove('error-highlight'));
         } else {
           cardBody.classList.remove('opacity-40', 'pointer-events-none');
         }
@@ -408,7 +426,7 @@
       document.getElementById('csv-backup-section').classList.remove('hidden');
       filtered.forEach((t, i) => {
         const card = document.createElement('div');
-        card.className = 'evaluation-card bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-6 relative';
+        card.className = 'evaluation-card bg-white border border-slate-200 rounded-2xl p-6 space-y-6 shadow-sm';
         
         // 評価対象外のチェックボックスを追加
         let html = `
@@ -429,10 +447,12 @@
 
         state.items.filter(it => it.section === '個別').forEach(it => {
           html += `<div class="space-y-2"><label class="text-sm font-semibold block">${it.name} <span class="text-rose-500">*</span></label>`;
-          if (it.type === 'text') html += `<textarea oninput="handleVal('${t.id}','${it.id}',this.value)" class="w-full h-24 p-3 border rounded-lg text-sm bg-white" placeholder="${it.name}を入力してください"></textarea>`;
-          else {
-            html += `<div class="flex flex-col gap-2">`;
-            it.choices.forEach((ch, ci) => html += `<label id="L-${t.id}-${it.id}-${ci}" class="flex items-center cursor-pointer border rounded-lg px-4 py-3 text-sm bg-white"><input type="radio" name="R-${t.id}-${it.id}" onclick="handleRadio('${t.id}','${it.id}','${ch}',${ci},${it.choices.length})" class="mr-3 text-indigo-600 h-4 w-4" /><span>${ch}</span></label>`);
+          if (it.type === 'text') {
+            html += `<textarea id="input-field-${t.id}-${it.id}" oninput="handleVal('${t.id}','${it.id}',this.value)" class="w-full h-24 p-3 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition duration-150 outline-none" placeholder="${it.name}を入力してください"></textarea>`;
+          } else {
+            // ラジオボタン全体を囲むコンテナにIDを設定し、赤枠ハイライトを行えるようにする
+            html += `<div id="input-container-${t.id}-${it.id}" class="flex flex-col gap-2 p-1.5 rounded-xl border border-transparent transition duration-150">`;
+            it.choices.forEach((ch, ci) => html += `<label id="L-${t.id}-${it.id}-${ci}" class="flex items-center cursor-pointer border border-slate-200 rounded-lg px-4 py-3 text-sm bg-white hover:bg-slate-50"><input type="radio" name="R-${t.id}-${it.id}" onclick="handleRadio('${t.id}','${it.id}','${ch}',${ci},${it.choices.length})" class="mr-3 text-indigo-600 h-4 w-4" /><span>${ch}</span></label>`);
             html += `</div>`;
           }
           html += `</div>`;
@@ -442,12 +462,36 @@
       updateCsv();
     }
 
-    window.handleMyNameInput = (v) => { state.selectedMyName = v; updateCsv(); };
+    window.handleMyNameInput = (v) => { 
+      state.selectedMyName = v; 
+      document.getElementById('my-name').classList.remove('error-highlight');
+      updateCsv(); 
+    };
     window.handleMyGroupSelect = (v) => { state.selectedMyGroup = v; state.evals = {}; state.excludeTargets = {}; renderTargets(); };
-    window.handleVal = (tid, itid, v) => { if(!state.evals[tid]) state.evals[tid]={}; state.evals[tid][itid]=v; updateCsv(); };
+    
+    window.handleVal = (tid, itid, v) => { 
+      if(!state.evals[tid]) state.evals[tid]={}; 
+      state.evals[tid][itid]=v; 
+      
+      // 入力されたら即座に赤枠ハイライトを消去する
+      const el = document.getElementById(`input-field-${tid}-${itid}`);
+      if (el) el.classList.remove('error-highlight');
+      
+      updateCsv(); 
+    };
+    
     window.handleRadio = (tid, itid, v, ci, len) => {
-      if(!state.evals[tid]) state.evals[tid]={}; state.evals[tid][itid]=v;
-      for(let i=0; i<len; i++){ document.getElementById(`L-${tid}-${itid}-${i}`).className = (i===ci) ? "flex items-center cursor-pointer border-indigo-600 bg-indigo-50 rounded-lg px-4 py-3 text-sm" : "flex items-center cursor-pointer border rounded-lg px-4 py-3 text-sm bg-white"; }
+      if(!state.evals[tid]) state.evals[tid]={}; 
+      state.evals[tid][itid]=v;
+      
+      for(let i=0; i<len; i++){ 
+        document.getElementById(`L-${tid}-${itid}-${i}`).className = (i===ci) ? "flex items-center cursor-pointer border-indigo-600 bg-indigo-50 rounded-lg px-4 py-3 text-sm" : "flex items-center cursor-pointer border border-slate-200 rounded-lg px-4 py-3 text-sm bg-white hover:bg-slate-50"; 
+      }
+      
+      // 選択されたらラジオボタンのコンテナ全体の赤枠ハイライトを消去する
+      const el = document.getElementById(`input-container-${tid}-${itid}`);
+      if (el) el.classList.remove('error-highlight');
+      
       updateCsv();
     };
 
@@ -460,14 +504,14 @@
 
     function updateCsv() {
       if(!state.selectedMyName || !state.selectedMyGroup) return;
-      const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
+      const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('学籍')&&!it.name.includes('番号')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
       const ts = new Date().toLocaleString('ja-JP');
       const rows = filtered.map(t => {
         const row = [ts, state.selectedMyName, state.selectedMyGroup];
         
         // 共通項目の格納
-        state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).forEach(it=>row.push(state.commonAnswers[it.id]||''));
+        state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('学籍')&&!it.name.includes('番号')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).forEach(it=>row.push(state.commonAnswers[it.id]||''));
         
         row.push(t.name);
         
@@ -493,30 +537,86 @@
       const errorMessage = document.getElementById('error-message');
       
       errorAlert.classList.add('hidden');
+      
+      // 全体の赤枠ハイライトを一旦リセット
+      const activeHighlights = document.querySelectorAll('.error-highlight');
+      activeHighlights.forEach(el => el.classList.remove('error-highlight'));
 
-      // バリデーションチェック (名前、グループが空の場合は送信不可)
-      if (!state.selectedMyName.trim() || !state.selectedMyGroup) {
-        alert("名前と所属グループを必ず入力・選択してください。");
-        return;
+      let firstEmptyElement = null;
+
+      // 共通基本項目のバリデーション＆赤枠設定
+      if (!state.selectedMyName.trim()) {
+        const el = document.getElementById('my-name');
+        el.classList.add('error-highlight');
+        if (!firstEmptyElement) firstEmptyElement = el;
       }
 
-      // 評価項目入力の未選択バリデーションチェック
+      if (!state.selectedMyGroup) {
+        const el = document.getElementById('my-group');
+        el.classList.add('error-highlight');
+        if (!firstEmptyElement) firstEmptyElement = el;
+      }
+
+      // その他動的共通項目のバリデーション
+      const commonFields = state.items.filter(it => 
+        it.section === '共通' && 
+        !it.name.includes('所属') && 
+        !it.name.includes('グループ') && 
+        !it.name.includes('名前') && 
+        !it.name.includes('氏名') && 
+        !it.name.includes('学籍') && 
+        !it.name.includes('番号') && 
+        !it.name.includes('チーム')
+      );
+      commonFields.forEach(it => {
+        const val = state.commonAnswers[it.id];
+        if (!val || !val.trim()) {
+          const el = document.getElementById(`common-input-${it.id}`);
+          if (el) {
+            el.classList.add('error-highlight');
+            if (!firstEmptyElement) firstEmptyElement = el;
+          }
+        }
+      });
+
+      // 個別評価項目のバリデーション
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
       const individualItems = state.items.filter(it => it.section === '個別');
       
-      for (let target of filtered) {
-        // (2) 評価対象外にチェックされている対象はバリデーションを完全にスキップ
-        if (state.excludeTargets[target.id]) {
-          continue;
-        }
-        for (let item of individualItems) {
-          const val = state.evals[target.id]?.[item.id];
-          if (!val || val.trim() === '') {
-            alert(`「${target.name}」への項目「${item.name}」が未入力・未選択です。\n評価対象外とする場合は、右上の「評価対象外」チェックをオンにしてください。`);
-            btn.disabled = false;
-            return;
+      if (state.selectedMyGroup) {
+        for (let target of filtered) {
+          // (2) 評価対象外にチェックされているカードはバリデーションを完全に免除（スキップ）
+          if (state.excludeTargets[target.id]) {
+            continue;
+          }
+          for (let item of individualItems) {
+            const val = state.evals[target.id]?.[item.id];
+            if (!val || val.trim() === '') {
+              // 該当する未入力コンポーネントを赤枠ハイライトする
+              let el;
+              if (item.type === 'text') {
+                el = document.getElementById(`input-field-${target.id}-${item.id}`);
+              } else {
+                el = document.getElementById(`input-container-${target.id}-${item.id}`);
+              }
+              if (el) {
+                el.classList.add('error-highlight');
+                if (!firstEmptyElement) firstEmptyElement = el;
+              }
+            }
           }
         }
+      }
+
+      // (3) 未記入箇所がある場合、その最初の要素に自動スムーズスクロールしてブロックする
+      if (firstEmptyElement) {
+        firstEmptyElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // フォーカス可能な要素であればフォーカス
+        if (typeof firstEmptyElement.focus === 'function') {
+          firstEmptyElement.focus();
+        }
+        alert("未入力・未選択の必須項目があります。赤枠で示された箇所を回答してください。");
+        return;
       }
 
       // --- 防御ガード：送信先GAS URLが空、または不正な形式の場合は送信そのものをブロック ---
@@ -529,7 +629,7 @@
 
       btn.disabled = true; btn.textContent = '送信中...';
       try {
-        const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
+        const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('学籍')&&!it.name.includes('番号')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
         
         const data = filtered.map(t => {
           const isExcluded = state.excludeTargets[t.id];
@@ -550,7 +650,7 @@
           
           state.items.forEach(it => { 
             if(it.section === '共通') { 
-              if(!it.name.includes('所属') && !it.name.includes('名前') && !it.name.includes('氏名') && !it.name.includes('グループ') && !it.name.includes('チーム')) {
+              if(!it.name.includes('所属') && !it.name.includes('名前') && !it.name.includes('氏名') && !it.name.includes('学籍') && !it.name.includes('番号') && !it.name.includes('グループ') && !it.name.includes('チーム')) {
                 res[it.name] = state.commonAnswers[it.id] || ''; 
               }
             } else { 
@@ -580,7 +680,7 @@
         
         const resText = await response.text();
         
-        // 【最重要修正】レスポンスを解析する前にリダイレクトCORSによる空文字やOpaque対応を最優先してキャッチ
+        // 【最重要修正】レスポンスを解析する前にCORS等によるすれ違いがないかキャッチ
         if (response.type === 'opaque' || resText.trim() === "" || resText.includes("DOCTYPE")) {
           // (3) スプレッドシート側の追記は確実に完了しているため、正常完了画面へ進める
           document.getElementById('evaluation-form').classList.add('hidden'); 
@@ -604,8 +704,7 @@
           throw new Error(resJson.message || "GAS集計システムが処理に失敗しました。ヘッダー定義などを確認してください。"); 
         }
       } catch (err) {
-        // (3) GoogleのCORS一時リダイレクト（TypeError / Failed to fetch）に起因する見かけ上の通信切断であるかを判定して救済
-        // テストデバッガー(test_submit.html)と同様に、確実に追記が行われている場合は完了画面に遷移させます
+        // GoogleのCORS一時リダイレクト（TypeError / Failed to fetch）に起因する見かけ上の通信切断であるかを判定して救済
         if (err.message.includes("Failed to fetch") || err.message.includes("TypeError")) {
           document.getElementById('evaluation-form').classList.add('hidden'); 
           document.getElementById('success-screen').classList.remove('hidden'); 
