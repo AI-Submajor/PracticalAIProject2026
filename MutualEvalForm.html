@@ -604,7 +604,8 @@
 
       // 個別評価項目のバリデーション
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
-      const individualItems = state.items.filter(it => id.section === '個別' || it.section === '個別');
+      // 【バグ修正】 it.section 判定に潜んでいたタイポ「id.section」を「it.section」に完全修正！
+      const individualItems = state.items.filter(it => it.section === '個別');
       
       if (state.selectedMyGroup) {
         for (let target of filtered) {
