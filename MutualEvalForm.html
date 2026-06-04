@@ -31,17 +31,17 @@
       <span id="loader-notice-text">スプレッドシートから最新の設定を同期しています...</span>
     </div>
 
-    <!-- 致命的エラー（Fetch制限など）の回避パネル -->
+    <!-- 致命的エラー（Fetch制限・404HTML誤認など）の回避パネル -->
     <div id="fatal-error-screen" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-950 p-6 rounded-2xl mb-8 shadow-sm">
       <div class="flex items-center space-x-3 mb-3 text-rose-700">
         <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
         </svg>
-        <h3 class="font-extrabold text-lg">データの同期が遮断されました (Failed to fetch)</h3>
+        <h3 class="font-extrabold text-lg">データの同期に失敗しました</h3>
       </div>
       <div class="text-sm leading-relaxed mb-6 space-y-3">
-        <p>ブラウザのセキュリティ制限（ローカルファイル実行時のFetch制限）により、同期が停止しました。</p>
-        <p class="font-bold">💡 解決策：スプレッドシートの内容を貼り付けるだけで、今すぐこの場で起動できます。</p>
+        <p class="text-rose-900" id="fatal-error-description">ブラウザのセキュリティ制限（ローカルファイル実行時のFetch制限）、または指定されたURLが404エラー（HTMLを返却）のため、同期が停止しました。</p>
+        <p class="font-bold text-slate-700">💡 解決策：名簿スプレッドシートの内容を全選択して、下の枠に貼り付けるだけで、今すぐこの場で起動できます。</p>
       </div>
 
       <div class="bg-white p-5 rounded-xl border border-rose-200 space-y-4 shadow-sm">
@@ -124,10 +124,17 @@
       targets: [], items: [], selectedMyName: '', selectedMyGroup: '', commonAnswers: {}, evals: {}
     };
 
+    // プレーンテキストのみを取得し、誤ってHTMLページが返された場合は即座に遮断するFetch
     async function fetchCsv(url) {
       const response = await fetch(url);
-      if (!response.ok) throw new Error(`Fetch Error: ${response.status}`);
-      return await response.text();
+      if (!response.ok) throw new Error(`HTTPエラー [ステータス: ${response.status}]`);
+      const text = await response.text();
+      
+      const clean = text.trim();
+      if (clean.startsWith('<!DOCTYPE') || clean.startsWith('<html') || clean.startsWith('<xml')) {
+        throw new Error(`【CORS制限 / URL設定ミス】\n指定されたURL "${url}" から有効なCSVデータを読み込めませんでした。\nサーバーはCSVの代わりにHTMLドキュメント（GitHub 404 Pagesやログイン画面）を返却しています。\n\nスプレッドシートの「Webに公開」URLが正しくカンマ区切り(.csv)に設定されているかご確認ください。`);
+      }
+      return text;
     }
 
     window.onload = async function() {
@@ -172,9 +179,12 @@
     };
 
     function showFatalError(log) {
-      document.getElementById('connection-indicator').textContent = "CORS 制限";
+      document.getElementById('connection-indicator').textContent = "同期エラー";
+      document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
       document.getElementById('loader-notice').classList.add('hidden');
-      document.getElementById('fatal-error-screen').classList.remove('hidden');
+      
+      const fatalScreen = document.getElementById('fatal-error-screen');
+      fatalScreen.classList.remove('hidden');
       document.getElementById('fatal-error-log').textContent = log;
     }
 
@@ -196,8 +206,11 @@
       const select = document.getElementById('my-group');
       select.innerHTML = '<option value="">-- グループを選択してください --</option>';
       state.targets.forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t.name; opt.textContent = t.name; select.appendChild(opt);
+        const opt = document.createElement('opt'); // 不要なネストやバグを防ぐため標準optionタグを生成
+        const optionEl = document.createElement('option');
+        optionEl.value = t.name; 
+        optionEl.textContent = t.name; 
+        select.appendChild(optionEl);
       });
       document.getElementById('evaluation-form').classList.remove('hidden');
       renderCommon();
