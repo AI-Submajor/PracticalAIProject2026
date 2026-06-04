@@ -46,7 +46,7 @@
         <div class="bg-white/80 p-4 rounded-lg border border-rose-200 space-y-1 text-slate-700">
           <p class="font-bold text-rose-800 text-xs">🛠️ 管理者・教員向けチェックリスト：</p>
           <ul class="list-disc pl-5 space-y-1 text-xs">
-            <li>アドレスバーのURLパラメータ（<code>?config=...</code>）で指定した公開URLが正しいか確認してください。</li>
+            <li>アドレスバー of URLパラメータ（<code>?config=...</code>）で指定した公開URLが正しいか確認してください。</li>
             <li>設定元のスプレッドシートが「Webに公開」から<strong>「カンマ区切り値(.csv)」</strong>形式で一般公開されているか確認してください。</li>
           </ul>
         </div>
@@ -310,7 +310,7 @@
       cont.innerHTML = '';
       
       // 共通項目をバインドする際、「名前」や「所属グループ」「氏名」などに該当する項目は、
-      // 静的に用意された入力欄と重複するため、動的追加エリアから除外します。
+      // 静的に用意された入力欄と重複するため、動的追加エリアから確実に除外します。
       state.items.filter(it => 
         it.section === '共通' && 
         !it.name.includes('所属') && 
