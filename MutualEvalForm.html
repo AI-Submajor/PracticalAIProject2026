@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>相互評価ツール 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 pb-16 font-sans">
+
+  <!-- システム制御バー -->
+  <div class="bg-slate-900 text-white p-3 sticky top-0 z-50 shadow-md flex justify-between items-center text-xs">
+    <div class="flex items-center space-x-2">
+      <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+      <span class="font-bold text-slate-300">相互評価システム 2026</span>
+    </div>
+    <div id="connection-indicator" class="bg-slate-800 px-3 py-1 rounded text-slate-300 font-mono">
+      設定読込中...
+    </div>
+  </div>
+
+  <div class="max-w-4xl mx-auto px-4 py-8">
+    <header class="bg-white shadow-sm rounded-2xl p-6 mb-8 border border-slate-100">
+      <h1 id="app-title" class="text-2xl md:text-3xl font-extrabold text-indigo-700 text-center mb-2">相互評価ツール 2026</h1>
+      <p id="app-subtitle" class="text-slate-500 text-center text-sm font-medium">データを読み込んでいます...</p>
+    </header>
+
+    <!-- 読込中 / エラーメッセージ -->
+    <div id="loader-notice" class="bg-indigo-50 border border-indigo-200 text-indigo-800 p-4 rounded-xl mb-6 text-xs md:text-sm">
+      <span id="loader-notice-text">スプレッドシートから最新の設定を同期しています...</span>
+    </div>
+
+    <!-- 致命的エラー（Fetch制限など）の回避パネル -->
+    <div id="fatal-error-screen" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-950 p-6 rounded-2xl mb-8 shadow-sm">
+      <div class="flex items-center space-x-3 mb-3 text-rose-700">
+        <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <h3 class="font-extrabold text-lg">データの同期が遮断されました (Failed to fetch)</h3>
+      </div>
+      <div class="text-sm leading-relaxed mb-6 space-y-3">
+        <p>ブラウザのセキュリティ制限（ローカルファイル実行時のFetch制限）により、同期が停止しました。</p>
+        <p class="font-bold">💡 解決策：スプレッドシートの内容を貼り付けるだけで、今すぐこの場で起動できます。</p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-rose-200 space-y-4 shadow-sm">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">📋 評価対象 (名簿) CSVの貼り付け</label>
+          <textarea id="paste-targets-csv" class="w-full h-32 p-2 bg-slate-50 border border-slate-300 rounded text-xs font-mono focus:ring-1 focus:ring-indigo-500" placeholder="01_小籠包&#13;02_パンダラバース&#13;03_ぐるさん"></textarea>
+        </div>
+        <button type="button" onclick="importPastedCsv()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2.5 rounded-lg shadow transition">
+          貼り付けたデータでフォームを起動
+        </button>
+      </div>
+      <div class="p-3 bg-rose-100 rounded-lg text-[10px] font-mono text-rose-900 border border-rose-200 mt-4 overflow-x-auto" id="fatal-error-log"></div>
+    </div>
+
+    <!-- メインフォーム -->
+    <form id="evaluation-form" class="hidden space-y-8">
+      
+      <!-- 1. 共通入力 -->
+      <section class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100">
+        <h2 class="text-lg font-bold text-slate-900 mb-4 border-b pb-2 flex items-center">
+          <span class="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs mr-2 font-bold">1</span>
+          共通項目（評価者情報の入力）
+        </h2>
+        
+        <div class="space-y-5">
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-slate-700">あなたの名前（自由記述） <span class="text-rose-500">*</span></label>
+            <input type="text" id="my-name" oninput="handleMyNameInput(this.value)" class="w-full p-3 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="氏名を入力（例：人工知能 太郎）" />
+          </div>
+
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-slate-700">あなたの所属グループ（自分のチーム） <span class="text-rose-500">*</span></label>
+            <select id="my-group" onchange="handleMyGroupSelect(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800 focus:ring-2 focus:ring-indigo-500 transition">
+              <option value="">-- グループを選択してください --</option>
+            </select>
+          </div>
+
+          <div id="dynamic-common-fields" class="space-y-5 pt-2"></div>
+        </div>
+      </section>
+
+      <!-- 2. 個別評価 -->
+      <section class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100">
+        <h2 class="text-lg font-bold text-slate-900 mb-2 border-b pb-2 flex items-center">
+          <span class="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs mr-2 font-bold">2</span>
+          個別評価
+        </h2>
+        <div id="evaluation-targets" class="space-y-8 mt-6">
+          <div class="text-center py-12 text-amber-600 bg-amber-50/50 rounded-xl border border-dashed border-amber-200 text-sm">
+            所属グループを選択すると、評価カードが表示されます。
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100 text-center space-y-6">
+        <button type="button" id="btn-submit" class="w-full sm:w-auto text-sm font-bold px-10 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all">評価データを送信（登録）する</button>
+        
+        <div id="csv-backup-section" class="hidden border-t pt-6 text-left">
+          <button type="button" id="btn-toggle-csv" class="text-xs text-indigo-600 font-bold flex items-center space-x-1">▼ 入力済みCSVデータを確認・コピー</button>
+          <div id="csv-backup-area" class="mt-4">
+            <div class="relative">
+              <textarea id="csv-output-textarea" readonly class="w-full h-36 p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] border border-slate-800 rounded-lg outline-none"></textarea>
+              <button type="button" id="btn-copy-csv" class="absolute bottom-3 right-3 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold px-3 py-1.5 rounded transition">コピー</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </form>
+
+    <div id="success-screen" class="hidden bg-white shadow-sm rounded-2xl p-10 border border-slate-100 text-center space-y-6 max-w-xl mx-auto">
+      <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl font-black">✓</div>
+      <h2 class="text-2xl font-black text-slate-900">評価の送信が完了しました</h2>
+      <button type="button" onclick="window.location.reload();" class="text-sm font-bold text-indigo-600 hover:text-indigo-800">新しい入力を始める</button>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      config: { appTitle: '相互評価システム', evaluationType: 'individual', targetDataUrl: '', evaluationItemsUrl: '', gasSubmitUrl: 'https://script.google.com/macros/s/AKfycbxyMy2jb3WlzawOb3ddnrMXSAfcF5ga_MJMjWknlC6VN_yK6GKVa9QPmXK2vSt3JwLb5A/exec' },
+      targets: [], items: [], selectedMyName: '', selectedMyGroup: '', commonAnswers: {}, evals: {}
+    };
+
+    async function fetchCsv(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Fetch Error: ${response.status}`);
+      return await response.text();
+    }
+
+    window.onload = async function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const configUrl = urlParams.get('config') || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJpQdFTtwRNxSiWBLPBmShRVjjV7bYHmLHZz_4hmO6gZFZKhbrVV6YEpck6Q6uXoGNoaeQPqydWSIr/pub?output=csv';
+
+      try {
+        const configCsv = await fetchCsv(configUrl);
+        const parsed = Papa.parse(configCsv, { header: false, skipEmptyLines: true });
+        parsed.data.forEach((row, i) => {
+          if (i === 0) return;
+          const k = row[0]?.trim(), v = row[1]?.trim();
+          if (k.includes('タイトル')) state.config.appTitle = v;
+          else if (k.includes('項目')) state.config.evaluationItemsUrl = v;
+          else if (k.includes('対象')) state.config.targetDataUrl = v;
+          else if (k.includes('API') || v.includes('/macros/s/')) state.config.gasSubmitUrl = v;
+        });
+
+        const targetCsv = await fetchCsv(state.config.targetDataUrl);
+        const parsedTargets = Papa.parse(targetCsv, { header: false, skipEmptyLines: true });
+        parsedTargets.data.forEach((row, i) => {
+          if (i === 0) return;
+          const name = row[1] || row[0];
+          if (name) state.targets.push({ id: `id-${i}`, name: name.trim() });
+        });
+
+        const itemsCsv = await fetchCsv(state.config.evaluationItemsUrl);
+        const parsedItems = Papa.parse(itemsCsv, { header: false, skipEmptyLines: true });
+        parsedItems.data.forEach((row, i) => {
+          if (i === 0) return;
+          const section = row[0]?.includes('共通') ? '共通' : '個別';
+          const type = (row[2]?.includes('ラジオ') || row[2]?.includes('選択')) ? 'radio' : 'text';
+          if (row[1]) state.items.push({ id: `item-${i}`, section, name: row[1].trim(), desc: row[3] || '', type, choices: type === 'radio' ? ["4：とてもそう思う", "3：どちらかというとそう思う", "2：どちらかというとそう思わない", "1：そう思わない"] : [] });
+        });
+
+        document.getElementById('connection-indicator').textContent = "ONLINE 同期";
+        document.getElementById('connection-indicator').className = "bg-green-800 px-3 py-1 rounded text-white font-mono";
+        initForm();
+      } catch (err) {
+        showFatalError(err.message);
+      }
+    };
+
+    function showFatalError(log) {
+      document.getElementById('connection-indicator').textContent = "CORS 制限";
+      document.getElementById('loader-notice').classList.add('hidden');
+      document.getElementById('fatal-error-screen').classList.remove('hidden');
+      document.getElementById('fatal-error-log').textContent = log;
+    }
+
+    window.importPastedCsv = function() {
+      const text = document.getElementById('paste-targets-csv').value;
+      const parsed = Papa.parse(text, { header: false, skipEmptyLines: true });
+      state.targets = [];
+      parsed.data.forEach((row, i) => {
+        if (i === 0 && row.join('').includes('Name')) return;
+        const name = row[1] || row[0];
+        if (name) state.targets.push({ id: `p-${i}`, name: name.trim() });
+      });
+      document.getElementById('fatal-error-screen').classList.add('hidden');
+      initForm();
+    };
+
+    function initForm() {
+      document.getElementById('app-title').textContent = state.config.appTitle;
+      const select = document.getElementById('my-group');
+      select.innerHTML = '<option value="">-- グループを選択してください --</option>';
+      state.targets.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.name; opt.textContent = t.name; select.appendChild(opt);
+      });
+      document.getElementById('evaluation-form').classList.remove('hidden');
+      renderCommon();
+      document.getElementById('btn-submit').onclick = submitForm;
+      document.getElementById('btn-toggle-csv').onclick = () => document.getElementById('csv-backup-area').classList.toggle('hidden');
+      document.getElementById('btn-copy-csv').onclick = () => { document.getElementById('csv-output-textarea').select(); document.execCommand('copy'); alert('CSVをコピーしました'); };
+    }
+
+    function renderCommon() {
+      const cont = document.getElementById('dynamic-common-fields');
+      cont.innerHTML = '';
+      state.items.filter(it => it.section === '共通' && !it.name.includes('所属グループ')).forEach(it => {
+        const div = document.createElement('div');
+        div.className = "space-y-2 border-t pt-4";
+        div.innerHTML = `<label class="block text-sm font-semibold">${it.name} <span class="text-rose-500">*</span></label>` +
+          (it.type === 'text' ? `<input type="text" oninput="state.commonAnswers['${it.id}']=this.value;updateCsv();" class="w-full p-3 border rounded-lg text-sm bg-slate-50" />` : '');
+        cont.appendChild(div);
+      });
+    }
+
+    function renderTargets() {
+      const cont = document.getElementById('evaluation-targets');
+      cont.innerHTML = '';
+      const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
+      if (!state.selectedMyGroup) { cont.innerHTML = `<div class="text-center py-12 text-amber-600 bg-amber-50 rounded-xl border border-dashed border-amber-200">STEP 1 で所属グループを選択してください。</div>`; return; }
+      document.getElementById('csv-backup-section').classList.remove('hidden');
+      filtered.forEach((t, i) => {
+        const card = document.createElement('div');
+        card.className = 'evaluation-card bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-6';
+        let html = `<div class="flex justify-between pb-3 border-b border-slate-200"><div><h3 class="font-bold text-lg text-slate-800">${t.name}</h3></div><span class="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">評価対象 #${i+1}</span></div><div class="space-y-5 pt-2">`;
+        state.items.filter(it => it.section === '個別').forEach(it => {
+          html += `<div class="space-y-2"><label class="text-sm font-semibold block">${it.name} <span class="text-rose-500">*</span></label>`;
+          if (it.type === 'text') html += `<textarea oninput="handleVal('${t.id}','${it.id}',this.value)" class="w-full h-24 p-3 border rounded-lg text-sm" placeholder="${it.name}を入力してください"></textarea>`;
+          else {
+            html += `<div class="flex flex-col gap-2">`;
+            it.choices.forEach((ch, ci) => html += `<label id="L-${t.id}-${it.id}-${ci}" class="flex items-center cursor-pointer border rounded-lg px-4 py-3 text-sm bg-white"><input type="radio" name="R-${t.id}-${it.id}" onclick="handleRadio('${t.id}','${it.id}','${ch}',${ci},${it.choices.length})" class="mr-3 text-indigo-600 h-4 w-4" /><span>${ch}</span></label>`);
+            html += `</div>`;
+          }
+          html += `</div>`;
+        });
+        card.innerHTML = html + `</div>`; cont.appendChild(card);
+      });
+      updateCsv();
+    }
+
+    window.handleMyNameInput = (v) => { state.selectedMyName = v; updateCsv(); };
+    window.handleMyGroupSelect = (v) => { state.selectedMyGroup = v; state.evals = {}; renderTargets(); };
+    window.handleVal = (tid, itid, v) => { if(!state.evals[tid]) state.evals[tid]={}; state.evals[tid][itid]=v; updateCsv(); };
+    window.handleRadio = (tid, itid, v, ci, len) => {
+      if(!state.evals[tid]) state.evals[tid]={}; state.evals[tid][itid]=v;
+      for(let i=0; i<len; i++){ document.getElementById(`L-${tid}-${itid}-${i}`).className = (i===ci) ? "flex items-center cursor-pointer border-indigo-600 bg-indigo-50 rounded-lg px-4 py-3 text-sm" : "flex items-center cursor-pointer border rounded-lg px-4 py-3 text-sm bg-white"; }
+      updateCsv();
+    };
+
+    function updateCsv() {
+      if(!state.selectedMyName || !state.selectedMyGroup) return;
+      const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属グループ')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
+      const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
+      const ts = new Date().toLocaleString('ja-JP');
+      const rows = filtered.map(t => {
+        const row = [ts, state.selectedMyName, state.selectedMyGroup];
+        state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属グループ')).forEach(it=>row.push(state.commonAnswers[it.id]||''));
+        row.push(t.name);
+        state.items.filter(it=>it.section==='個別').forEach(it=>row.push(state.evals[t.id]?.[it.id]||''));
+        return row.map(v => `"${(v+'').replace(/"/g,'""')}"`).join(',');
+      });
+      document.getElementById('csv-output-textarea').value = [headers.join(','), ...rows].join('\n');
+    }
+
+    async function submitForm() {
+      const btn = document.getElementById('btn-submit');
+      btn.disabled = true; btn.textContent = '送信中...';
+      try {
+        const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属グループ')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
+        const data = state.targets.filter(t => t.name !== state.selectedMyGroup).map(t => {
+          const res = { 'タイムスタンプ': new Date().toLocaleString('ja-JP'), '自分の名前': state.selectedMyName, '所属グループ': state.selectedMyGroup, '評価対象': t.name };
+          state.items.forEach(it => { if(it.section==='共通'){ res[it.name]=state.commonAnswers[it.id]||''; } else { res[it.name]=state.evals[t.id]?.[it.id]||''; } });
+          return res;
+        });
+        const response = await fetch(state.config.gasSubmitUrl, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ data }) });
+        const resJson = JSON.parse(await response.text());
+        if(resJson.status === "success") { document.getElementById('evaluation-form').classList.add('hidden'); document.getElementById('success-screen').classList.remove('hidden'); }
+        else throw new Error(resJson.message);
+      } catch (err) {
+        alert("自動送信に失敗しました。下部のCSVをコピーして保存してください。\nエラー: " + err.message);
+        document.getElementById('csv-backup-area').classList.remove('hidden');
+      } finally { btn.disabled = false; btn.textContent = '評価データを送信（登録）する'; }
+    }
+  </script>
+</body>
+</html>
