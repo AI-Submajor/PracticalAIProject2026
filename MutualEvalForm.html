@@ -60,7 +60,7 @@
         <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
         </svg>
-        <h3 class="font-extrabold text-base md:text-lg">評価対象データ（名簿・評価項目）の読み込みに失敗しました</h3>
+        <h3 class="font-extrabold text-base md:text-lg">評価対象 data（名簿・評価項目）の読み込みに失敗しました</h3>
       </div>
       <div class="text-xs md:text-sm leading-relaxed space-y-2 text-rose-900">
         <p>
@@ -308,7 +308,17 @@
     function renderCommon() {
       const cont = document.getElementById('dynamic-common-fields');
       cont.innerHTML = '';
-      state.items.filter(it => it.section === '共通' && !it.name.includes('所属グループ')).forEach(it => {
+      
+      // 共通項目をバインドする際、「名前」や「所属グループ」「氏名」などに該当する項目は、
+      // 静的に用意された入力欄と重複するため、動的追加エリアから除外します。
+      state.items.filter(it => 
+        it.section === '共通' && 
+        !it.name.includes('所属') && 
+        !it.name.includes('グループ') && 
+        !it.name.includes('名前') && 
+        !it.name.includes('氏名') && 
+        !it.name.includes('チーム')
+      ).forEach(it => {
         const div = document.createElement('div');
         div.className = "space-y-2 border-t pt-4";
         div.innerHTML = `<label class="block text-sm font-semibold">${it.name} <span class="text-rose-500">*</span></label>` +
@@ -353,12 +363,12 @@
 
     function updateCsv() {
       if(!state.selectedMyName || !state.selectedMyGroup) return;
-      const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属グループ')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
+      const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
       const filtered = state.targets.filter(t => t.name !== state.selectedMyGroup);
       const ts = new Date().toLocaleString('ja-JP');
       const rows = filtered.map(t => {
         const row = [ts, state.selectedMyName, state.selectedMyGroup];
-        state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属グループ')).forEach(it=>row.push(state.commonAnswers[it.id]||''));
+        state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).forEach(it=>row.push(state.commonAnswers[it.id]||''));
         row.push(t.name);
         state.items.filter(it=>it.section==='個別').forEach(it=>row.push(state.evals[t.id]?.[it.id]||''));
         return row.map(v => `"${(v+'').replace(/"/g,'""')}"`).join(',');
@@ -377,20 +387,56 @@
 
       btn.disabled = true; btn.textContent = '送信中...';
       try {
-        const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属グループ')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
+        const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属')&&!it.name.includes('名前')&&!it.name.includes('氏名')&&!it.name.includes('グループ')&&!it.name.includes('チーム')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
+        
+        // GAS（gas-submit.js）側の受け取り期待キーである「Timestamp」,「EvaluatorName」,「EvaluatorGroup」,「TargetName」に
+        // 完全合致するようにマッピング形式を修正
         const data = state.targets.filter(t => t.name !== state.selectedMyGroup).map(t => {
-          const res = { 'タイムスタンプ': new Date().toLocaleString('ja-JP'), '自分の名前': state.selectedMyName, '所属グループ': state.selectedMyGroup, '評価対象': t.name };
-          state.items.forEach(it => { if(it.section==='共通'){ res[it.name]=state.commonAnswers[it.id]||''; } else { res[it.name]=state.evals[t.id]?.[it.id]||''; } });
+          const res = { 
+            'Timestamp': new Date().toLocaleString('ja-JP'), 
+            'EvaluatorName': state.selectedMyName, 
+            'EvaluatorGroup': state.selectedMyGroup, 
+            'TargetName': t.name 
+          };
+          
+          state.items.forEach(it => { 
+            if(it.section === '共通') { 
+              // 重複排除項目以外の動的共通フィールドの受け取り
+              if(!it.name.includes('所属') && !it.name.includes('名前') && !it.name.includes('氏名') && !it.name.includes('グループ') && !it.name.includes('チーム')) {
+                res[it.name] = state.commonAnswers[it.id] || ''; 
+              }
+            } else { 
+              res[it.name] = state.evals[t.id]?.[it.id] || ''; 
+            } 
+          });
           return res;
         });
-        const response = await fetch(state.config.gasSubmitUrl, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ data }) });
-        const resJson = JSON.parse(await response.text());
-        if(resJson.status === "success") { document.getElementById('evaluation-form').classList.add('hidden'); document.getElementById('success-screen').classList.remove('hidden'); }
-        else throw new Error(resJson.message);
+
+        // GASウェブアプリへデータを送信（リダイレクトを安全に追跡するパラメータを追加）
+        const response = await fetch(state.config.gasSubmitUrl, { 
+          method: 'POST', 
+          mode: 'cors', 
+          redirect: 'follow',
+          headers: { 'Content-Type': 'text/plain' }, 
+          body: JSON.stringify({ data }) 
+        });
+        
+        const resText = await response.text();
+        const resJson = JSON.parse(resText);
+        
+        if (resJson.status === "success") { 
+          document.getElementById('evaluation-form').classList.add('hidden'); 
+          document.getElementById('success-screen').classList.remove('hidden'); 
+        } else { 
+          throw new Error(resJson.message); 
+        }
       } catch (err) {
-        alert("自動送信に失敗しました。下部のCSVをコピーして保存してください。\nエラー: " + err.message);
+        alert("自動送信に失敗しました。下部のCSVをコピーして保存してください。\n\n【失敗の主な原因】:\n・GAS側のデプロイ権限が「全員(匿名含む)」に公開されていない\n・集計スプレッドシートの項目定義ヘッダーが一致していない\n\n【詳細エラー】: " + err.message);
         document.getElementById('csv-backup-area').classList.remove('hidden');
-      } finally { btn.disabled = false; btn.textContent = '評価データを送信（登録）する'; }
+      } finally { 
+        btn.disabled = false; 
+        btn.textContent = '評価データを送信（登録）する'; 
+      }
     }
   </script>
 </body>
