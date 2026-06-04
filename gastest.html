@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>相互評価GAS連携 テスト送信プログラム</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
+
+  <div class="max-w-2xl w-full bg-slate-800 rounded-2xl p-6 shadow-2xl border border-slate-700 space-y-6">
+    <div>
+      <h1 class="text-xl font-bold text-indigo-400 flex items-center gap-2">
+        🧪 GAS書き込み疎通テストデバッガー
+      </h1>
+      <p class="text-xs text-slate-400 mt-1">
+        アップロードされた「testdata.csv」のレコードを、集計用スプレッドシートの末尾へ確実に追記送信するテスト用プログラムです。
+      </p>
+    </div>
+
+    <!-- 送信先設定 -->
+    <div class="space-y-2">
+      <label class="block text-xs font-bold text-slate-300">集計結果登録API URL (GAS URL)</label>
+      <input type="text" id="test-gas-url" 
+        class="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-mono text-emerald-400 focus:outline-none focus:border-indigo-500"
+        value="https://script.google.com/macros/s/AKfycbxSlGO22vtp-BhEljEOMQvYf9lC0AIE_v2ruYq4W75IJJcgMQoHeoVkXUld-84bnDd1sw/exec">
+    </div>
+
+    <!-- 送信データプレビュー -->
+    <div class="space-y-2">
+      <div class="flex justify-between items-center">
+        <label class="block text-xs font-bold text-slate-300">送信テストデータ (testdata.csvの内容)</label>
+        <span class="text-[10px] text-indigo-400 font-bold bg-indigo-950 px-2 py-0.5 rounded">JSON形式</span>
+      </div>
+      <pre id="payload-preview" class="p-3 bg-slate-950 text-emerald-500 rounded-lg text-xs font-mono overflow-x-auto max-h-48 border border-slate-800"></pre>
+    </div>
+
+    <!-- テストボタン -->
+    <div class="flex gap-3">
+      <button type="button" onclick="runTest('cors')" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-3 rounded-lg shadow transition">
+        CORSモードで送信 (レスポンス検証用)
+      </button>
+      <button type="button" onclick="runTest('no-cors')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-3 rounded-lg shadow transition">
+        No-CORSモードで送信 (強制ねじ込み用)
+      </button>
+    </div>
+
+    <!-- テスト結果表示 -->
+    <div id="result-box" class="hidden bg-slate-950 rounded-xl p-4 border border-slate-800 space-y-3">
+      <div class="flex justify-between items-center">
+        <span class="text-xs font-bold" id="result-status">ステータス</span>
+        <span class="text-[10px] font-mono text-slate-500" id="response-time">0ms</span>
+      </div>
+      <div class="space-y-1">
+        <span class="text-[10px] text-slate-500 block">GASからの返却テキスト (JSONパース結果):</span>
+        <pre id="response-output" class="p-3 bg-slate-900 rounded text-xs font-mono overflow-x-auto max-h-40 border border-slate-800 text-slate-300"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // testdata.csvに基づくテスト用オブジェクト
+    const testRecord = {
+      data: [{
+        // 1. GAS側の代表的な英語パースキー
+        'Timestamp': new Date().toLocaleString('ja-JP'), 
+        'EvaluatorName': 'KYAW HAN SOE', 
+        'EvaluatorGroup': '01_小籠包', 
+        'TargetName': '02_パンダラバース',
+
+        // 2. スプレッドシート側の代表的な日本語マッピングキー
+        'タイムスタンプ': new Date().toLocaleString('ja-JP'),
+        '自分の名前': 'KYAW HAN SOE',
+        '所属グループ': '01_小籠包',
+        '自分のグループ': '01_小籠包',
+        '評価対象': '02_パンダラバース',
+        
+        // 評価観点 (アップロードされたtestdata.csvの値)
+        '観点1': '4',
+        '観点2': '4',
+        '観点3': '4',
+        '観04': '4', // 観点4
+        '観点4': '4',
+        '良かった点': '授業で学んだことを生かして発表したのが、素晴らしかったです。',
+        '改善できる点': 'グループ皆で、発表できればいいと思いました。'
+      }]
+    };
+
+    document.getElementById('payload-preview').textContent = JSON.stringify(testRecord, null, 2);
+
+    async function runTest(mode) {
+      const url = document.getElementById('test-gas-url').value.trim();
+      const output = document.getElementById('response-output');
+      const status = document.getElementById('result-status');
+      const timeBox = document.getElementById('response-time');
+      const box = document.getElementById('result-box');
+
+      box.classList.remove('hidden');
+      status.textContent = "送信中...";
+      status.className = "text-xs font-bold text-yellow-500 animate-pulse";
+      output.textContent = "";
+      output.className = "p-3 bg-slate-900 rounded text-xs font-mono overflow-x-auto max-h-40 border border-slate-800 text-slate-500";
+
+      const startTime = performance.now();
+
+      try {
+        // 重要: URLSearchParams を使わず、純粋なJSONをプレーンテキストとしてPOSTする。
+        // これにより、CORSプリフライト(OPTIONS)リクエストを回避しつつ、GASの e.postData.contents で100%パース可能なJSONデータを渡せます。
+        const response = await fetch(url, {
+          method: 'POST',
+          mode: mode, 
+          headers: {
+            'Content-Type': 'text/plain' // シンプルリクエスト要件を維持してCORSを完全バイパス
+          },
+          body: JSON.stringify(testRecord)
+        });
+
+        const endTime = performance.now();
+        timeBox.textContent = `${Math.round(endTime - startTime)}ms`;
+
+        if (mode === 'no-cors') {
+          status.textContent = "送信完了 (no-cors)";
+          status.className = "text-xs font-bold text-emerald-400";
+          output.className = "p-3 bg-slate-900 rounded text-xs font-mono overflow-x-auto max-h-40 border border-slate-800 text-emerald-500";
+          output.textContent = "✔ no-corsモードでGoogleサーバーへデータをねじ込みました。\nスプレッドシートの末尾に「KYAW HAN SOE」さんのデータが追加されているかブラウザで確認してください！\n(※no-corsモードのブラウザセキュリティ制限により、GASからの応答値の読み取りのみスキップされています。)";
+        } else {
+          const resText = await response.text();
+          let parsed;
+          try {
+            parsed = JSON.parse(resText);
+          } catch(e) {
+            throw new Error(`返却値がJSONではありませんでした。GASからエラーHTMLが戻っています。\n\n【生テキスト】:\n${resText}`);
+          }
+
+          status.textContent = "通信成功 (CORS)";
+          status.className = "text-xs font-bold text-green-400";
+          output.className = "p-3 bg-slate-900 rounded text-xs font-mono overflow-x-auto max-h-40 border border-slate-800 text-green-400";
+          output.textContent = JSON.stringify(parsed, null, 2);
+        }
+
+      } catch (err) {
+        const endTime = performance.now();
+        timeBox.textContent = `${Math.round(endTime - startTime)}ms`;
+        status.textContent = "送信失敗";
+        status.className = "text-xs font-bold text-rose-500";
+        output.className = "p-3 bg-slate-900 rounded text-xs font-mono overflow-x-auto max-h-40 border border-slate-800 text-rose-400";
+        output.textContent = err.message;
+      }
+    }
+  </script>
+</body>
+</html>
