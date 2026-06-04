@@ -16,50 +16,70 @@
       <span class="font-bold text-slate-300">相互評価システム 2026</span>
     </div>
     <div id="connection-indicator" class="bg-slate-800 px-3 py-1 rounded text-slate-300 font-mono">
-      設定読込中...
+      設定ロード中...
     </div>
   </div>
 
   <div class="max-w-4xl mx-auto px-4 py-8">
     <header class="bg-white shadow-sm rounded-2xl p-6 mb-8 border border-slate-100">
       <h1 id="app-title" class="text-2xl md:text-3xl font-extrabold text-indigo-700 text-center mb-2">相互評価ツール 2026</h1>
-      <p id="app-subtitle" class="text-slate-500 text-center text-sm font-medium">データを読み込んでいます...</p>
+      <p id="app-subtitle" class="text-slate-500 text-center text-sm font-medium">初期データを同期しています...</p>
     </header>
 
-    <!-- 読込中 / エラーメッセージ -->
-    <div id="loader-notice" class="bg-indigo-50 border border-indigo-200 text-indigo-800 p-4 rounded-xl mb-6 text-xs md:text-sm">
-      <span id="loader-notice-text">スプレッドシートから最新の設定を同期しています...</span>
+    <!-- 読込ステータス表示 -->
+    <div id="loader-notice" class="bg-indigo-50 border border-indigo-200 text-indigo-800 p-4 rounded-xl mb-6 text-xs md:text-sm font-medium">
+      <span id="loader-notice-text">Googleスプレッドシートから設定ファイルを同期しています...</span>
     </div>
 
-    <!-- 致命的エラー（Fetch制限・404HTML誤認など）の回避パネル -->
-    <div id="fatal-error-screen" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-950 p-6 rounded-2xl mb-8 shadow-sm">
+    <!-- 致命的エラー：Configファイル読込失敗時の表示エリア -->
+    <div id="config-error-screen" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-950 p-6 rounded-2xl mb-8 shadow-sm">
       <div class="flex items-center space-x-3 mb-3 text-rose-700">
         <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
         </svg>
-        <h3 class="font-extrabold text-lg">データの同期に失敗しました</h3>
+        <h3 class="font-extrabold text-base md:text-lg">設定ファイル（Config）の読み込みに失敗しました</h3>
       </div>
-      <div class="text-sm leading-relaxed mb-6 space-y-3">
-        <p class="text-rose-900" id="fatal-error-description">ブラウザのセキュリティ制限（ローカルファイル実行時のFetch制限）、または指定されたURLが404エラー（HTMLを返却）のため、同期が停止しました。</p>
-        <p class="font-bold text-slate-700">💡 解決策：名簿スプレッドシートの内容を全選択して、下の枠に貼り付けるだけで、今すぐこの場で起動できます。</p>
-      </div>
-
-      <div class="bg-white p-5 rounded-xl border border-rose-200 space-y-4 shadow-sm">
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">📋 評価対象 (名簿) CSVの貼り付け</label>
-          <textarea id="paste-targets-csv" class="w-full h-32 p-2 bg-slate-50 border border-slate-300 rounded text-xs font-mono focus:ring-1 focus:ring-indigo-500" placeholder="01_小籠包&#13;02_パンダラバース&#13;03_ぐるさん"></textarea>
+      <div class="text-xs md:text-sm leading-relaxed space-y-2 text-rose-900">
+        <p>
+          相互評価ツールの起動に必要な「授業基本設定（Configスプレッドシート）」の読み込み・同期ができませんでした。
+        </p>
+        <div class="bg-white/80 p-4 rounded-lg border border-rose-200 space-y-1 text-slate-700">
+          <p class="font-bold text-rose-800 text-xs">🛠️ 管理者・教員向けチェックリスト：</p>
+          <ul class="list-disc pl-5 space-y-1 text-xs">
+            <li>アドレスバーのURLパラメータ（<code>?config=...</code>）で指定した公開URLが正しいか確認してください。</li>
+            <li>設定元のスプレッドシートが「Webに公開」から<strong>「カンマ区切り値(.csv)」</strong>形式で一般公開されているか確認してください。</li>
+          </ul>
         </div>
-        <button type="button" onclick="importPastedCsv()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2.5 rounded-lg shadow transition">
-          貼り付けたデータでフォームを起動
-        </button>
       </div>
-      <div class="p-3 bg-rose-100 rounded-lg text-[10px] font-mono text-rose-900 border border-rose-200 mt-4 overflow-x-auto" id="fatal-error-log"></div>
+      <div class="p-3 bg-rose-100 rounded-lg text-[11px] font-mono text-rose-900 border border-rose-200 mt-4 overflow-x-auto" id="config-error-log"></div>
     </div>
 
-    <!-- メインフォーム -->
+    <!-- 致命的エラー：名簿や評価基準CSV読込失敗時の表示エリア -->
+    <div id="data-error-screen" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-950 p-6 rounded-2xl mb-8 shadow-sm">
+      <div class="flex items-center space-x-3 mb-3 text-rose-700">
+        <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <h3 class="font-extrabold text-base md:text-lg">評価対象データ（名簿・評価項目）の読み込みに失敗しました</h3>
+      </div>
+      <div class="text-xs md:text-sm leading-relaxed space-y-2 text-rose-900">
+        <p>
+          Configスプレッドシートの取得には成功しましたが、その中に記述されている「評価対象名簿」または「評価項目定義」のロードができませんでした。
+        </p>
+        <div class="bg-white/80 p-4 rounded-lg border border-rose-200 space-y-1 text-slate-700">
+          <p class="font-bold text-rose-800 text-xs">🛠️ 管理者・教員向けチェックリスト：</p>
+          <ul class="list-disc pl-5 space-y-1 text-xs">
+            <li>Configスプレッドシートに記述した「評価対象」および「評価項目定義」のURLが、どちらもGoogleスプレッドシートの<strong>「Webに公開（カンマ区切り値.csv）」</strong>で発行されたURLであるか確認してください。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="p-3 bg-rose-100 rounded-lg text-[11px] font-mono text-rose-900 border border-rose-200 mt-4 overflow-x-auto" id="data-error-log"></div>
+    </div>
+
+    <!-- メイン入力フォーム -->
     <form id="evaluation-form" class="hidden space-y-8">
       
-      <!-- 1. 共通入力 -->
+      <!-- 1. 共通入力（評価者情報） -->
       <section class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100">
         <h2 class="text-lg font-bold text-slate-900 mb-4 border-b pb-2 flex items-center">
           <span class="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs mr-2 font-bold">1</span>
@@ -96,12 +116,15 @@
         </div>
       </section>
 
+      <!-- 送信およびバックアップCSV表示 -->
       <section class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100 text-center space-y-6">
         <button type="button" id="btn-submit" class="w-full sm:w-auto text-sm font-bold px-10 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all">評価データを送信（登録）する</button>
         
+        <!-- 送信バックアップ用テキストエリア（送信失敗時や手動提出用、学生名簿等の投入用途ではない純粋な送信控え） -->
         <div id="csv-backup-section" class="hidden border-t pt-6 text-left">
-          <button type="button" id="btn-toggle-csv" class="text-xs text-indigo-600 font-bold flex items-center space-x-1">▼ 入力済みCSVデータを確認・コピー</button>
+          <button type="button" id="btn-toggle-csv" class="text-xs text-indigo-600 font-bold flex items-center space-x-1">▼ 入力済みCSVデータを確認・コピー（ネットワークエラー時のバックアップ用）</button>
           <div id="csv-backup-area" class="mt-4">
+            <p class="text-[11px] text-slate-500 mb-2">送信中にエラーが起きた場合は、以下のテキストをすべてコピーして教員へ提出してください。</p>
             <div class="relative">
               <textarea id="csv-output-textarea" readonly class="w-full h-36 p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] border border-slate-800 rounded-lg outline-none"></textarea>
               <button type="button" id="btn-copy-csv" class="absolute bottom-3 right-3 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold px-3 py-1.5 rounded transition">コピー</button>
@@ -111,6 +134,7 @@
       </section>
     </form>
 
+    <!-- 送信完了画面 -->
     <div id="success-screen" class="hidden bg-white shadow-sm rounded-2xl p-10 border border-slate-100 text-center space-y-6 max-w-xl mx-auto">
       <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl font-black">✓</div>
       <h2 class="text-2xl font-black text-slate-900">評価の送信が完了しました</h2>
@@ -119,30 +143,46 @@
   </div>
 
   <script>
+    // ダミー・プリセットは不正な評価防止のため完全廃止
     const state = {
-      config: { appTitle: '相互評価システム', evaluationType: 'individual', targetDataUrl: '', evaluationItemsUrl: '', gasSubmitUrl: 'https://script.google.com/macros/s/AKfycbxyMy2jb3WlzawOb3ddnrMXSAfcF5ga_MJMjWknlC6VN_yK6GKVa9QPmXK2vSt3JwLb5A/exec' },
+      config: { appTitle: '相互評価システム', evaluationType: 'individual', targetDataUrl: '', evaluationItemsUrl: '', gasSubmitUrl: '' },
       targets: [], items: [], selectedMyName: '', selectedMyGroup: '', commonAnswers: {}, evals: {}
     };
 
-    // プレーンテキストのみを取得し、誤ってHTMLページが返された場合は即座に遮断するFetch
+    // GoogleスプレッドシートからCSVを取得
     async function fetchCsv(url) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTPエラー [ステータス: ${response.status}]`);
       const text = await response.text();
       
       const clean = text.trim();
+      // Google側で未公開（アクセス制限中）または404の場合、HTMLコードが返されるためパースさせずにブロックする
       if (clean.startsWith('<!DOCTYPE') || clean.startsWith('<html') || clean.startsWith('<xml')) {
-        throw new Error(`【CORS制限 / URL設定ミス】\n指定されたURL "${url}" から有効なCSVデータを読み込めませんでした。\nサーバーはCSVの代わりにHTMLドキュメント（GitHub 404 Pagesやログイン画面）を返却しています。\n\nスプレッドシートの「Webに公開」URLが正しくカンマ区切り(.csv)に設定されているかご確認ください。`);
+        throw new Error(`Google側がCSVではなくHTML(ログイン画面や404エラーページ)を返却しました。シートが一般の「Webに公開(CSV)」に設定されているかご確認ください。\nURL: ${url}`);
       }
       return text;
     }
 
     window.onload = async function() {
       const urlParams = new URLSearchParams(window.location.search);
-      const configUrl = urlParams.get('config') || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRJpQdFTtwRNxSiWBLPBmShRVjjV7bYHmLHZz_4hmO6gZFZKhbrVV6YEpck6Q6uXoGNoaeQPqydWSIr/pub?output=csv';
+      const configUrl = urlParams.get('config');
+
+      // 1. Configパラメータがない場合は起動そのものを停止して厳格エラー
+      if (!configUrl) {
+        showConfigError("URLパラメータに設定ファイル（?config=...）が指定されていません。\n相互評価用のConfigスプレッドシートURLを指定して実行してください。");
+        return;
+      }
 
       try {
-        const configCsv = await fetchCsv(configUrl);
+        // 2. Configファイルを読み込む
+        updateNoticeStatus('設定ファイル（Config）を読み込んでいます...');
+        let configCsv;
+        try {
+          configCsv = await fetchCsv(configUrl);
+        } catch (err) {
+          throw new Error(`設定ファイルのロードに失敗しました。\n【エラー内容】: ${err.message}`);
+        }
+
         const parsed = Papa.parse(configCsv, { header: false, skipEmptyLines: true });
         parsed.data.forEach((row, i) => {
           if (i === 0) return;
@@ -153,7 +193,21 @@
           else if (k.includes('API') || v.includes('/macros/s/')) state.config.gasSubmitUrl = v;
         });
 
-        const targetCsv = await fetchCsv(state.config.targetDataUrl);
+        // 必須URLのマッピング検証
+        if (!state.config.targetDataUrl || !state.config.evaluationItemsUrl) {
+          throw new Error("読み込んだ設定ファイルの中に「対象（名簿URL）」または「項目定義（項目URL）」の設定項目が見つかりません。");
+        }
+
+        // 3. 評価対象(名簿)をロード
+        updateNoticeStatus('評価対象（名簿リスト）を同期しています...');
+        let targetCsv;
+        try {
+          targetCsv = await fetchCsv(state.config.targetDataUrl);
+        } catch (err) {
+          showDataError(`評価対象（名簿）データの読み込みに失敗しました。\n【確認したURL】: ${state.config.targetDataUrl}\n\n【詳細】: ${err.message}`);
+          return;
+        }
+
         const parsedTargets = Papa.parse(targetCsv, { header: false, skipEmptyLines: true });
         parsedTargets.data.forEach((row, i) => {
           if (i === 0) return;
@@ -161,7 +215,21 @@
           if (name) state.targets.push({ id: `id-${i}`, name: name.trim() });
         });
 
-        const itemsCsv = await fetchCsv(state.config.evaluationItemsUrl);
+        if (state.targets.length === 0) {
+          showDataError('読み込まれた名簿データが0件です。');
+          return;
+        }
+
+        // 4. 評価項目定義をロード
+        updateNoticeStatus('評価項目定義を同期しています...');
+        let itemsCsv;
+        try {
+          itemsCsv = await fetchCsv(state.config.evaluationItemsUrl);
+        } catch (err) {
+          showDataError(`評価項目定義の読み込みに失敗しました。\n【確認したURL】: ${state.config.evaluationItemsUrl}\n\n【詳細】: ${err.message}`);
+          return;
+        }
+
         const parsedItems = Papa.parse(itemsCsv, { header: false, skipEmptyLines: true });
         parsedItems.data.forEach((row, i) => {
           if (i === 0) return;
@@ -170,43 +238,54 @@
           if (row[1]) state.items.push({ id: `item-${i}`, section, name: row[1].trim(), desc: row[3] || '', type, choices: type === 'radio' ? ["4：とてもそう思う", "3：どちらかというとそう思う", "2：どちらかというとそう思わない", "1：そう思わない"] : [] });
         });
 
+        // すべての同期が完了したらフォームを安全に展開
         document.getElementById('connection-indicator').textContent = "ONLINE 同期";
         document.getElementById('connection-indicator').className = "bg-green-800 px-3 py-1 rounded text-white font-mono";
+        document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
+        document.getElementById('loader-notice').classList.add('hidden');
         initForm();
+
       } catch (err) {
-        showFatalError(err.message);
+        // 設定読み込み時（Config自体のFetch失敗時）のエラーを厳格に捕捉してUIロック
+        showConfigError(err.message);
       }
     };
 
-    function showFatalError(log) {
-      document.getElementById('connection-indicator').textContent = "同期エラー";
-      document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
-      document.getElementById('loader-notice').classList.add('hidden');
-      
-      const fatalScreen = document.getElementById('fatal-error-screen');
-      fatalScreen.classList.remove('hidden');
-      document.getElementById('fatal-error-log').textContent = log;
+    function updateNoticeStatus(msg) {
+      document.getElementById('loader-notice-text').textContent = msg;
     }
 
-    window.importPastedCsv = function() {
-      const text = document.getElementById('paste-targets-csv').value;
-      const parsed = Papa.parse(text, { header: false, skipEmptyLines: true });
-      state.targets = [];
-      parsed.data.forEach((row, i) => {
-        if (i === 0 && row.join('').includes('Name')) return;
-        const name = row[1] || row[0];
-        if (name) state.targets.push({ id: `p-${i}`, name: name.trim() });
-      });
-      document.getElementById('fatal-error-screen').classList.add('hidden');
-      initForm();
-    };
+    // Configロード失敗時（致命的）
+    function showConfigError(log) {
+      document.getElementById('connection-indicator').textContent = "Configエラー";
+      document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
+      document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+      document.getElementById('loader-notice').classList.add('hidden');
+      
+      const configScreen = document.getElementById('config-error-screen');
+      configScreen.classList.remove('hidden');
+      document.getElementById('config-error-log').textContent = log;
+      document.getElementById('evaluation-form').classList.add('hidden');
+    }
+
+    // 名簿・評価項目読込失敗時
+    function showDataError(log) {
+      document.getElementById('connection-indicator').textContent = "データロードエラー";
+      document.getElementById('connection-indicator').className = "bg-rose-700 px-3 py-1 rounded text-white font-mono";
+      document.getElementById('status-dot').className = "w-2.5 h-2.5 rounded-full bg-rose-500";
+      document.getElementById('loader-notice').classList.add('hidden');
+      
+      const dataScreen = document.getElementById('data-error-screen');
+      dataScreen.classList.remove('hidden');
+      document.getElementById('data-error-log').textContent = log;
+      document.getElementById('evaluation-form').classList.add('hidden');
+    }
 
     function initForm() {
       document.getElementById('app-title').textContent = state.config.appTitle;
       const select = document.getElementById('my-group');
       select.innerHTML = '<option value="">-- グループを選択してください --</option>';
       state.targets.forEach(t => {
-        const opt = document.createElement('opt'); // 不要なネストやバグを防ぐため標準optionタグを生成
         const optionEl = document.createElement('option');
         optionEl.value = t.name; 
         optionEl.textContent = t.name; 
@@ -282,6 +361,13 @@
 
     async function submitForm() {
       const btn = document.getElementById('btn-submit');
+      
+      // バリデーションチェック
+      if (!state.selectedMyName.trim() || !state.selectedMyGroup) {
+        alert("名前と所属グループを必ず入力・選択してください。");
+        return;
+      }
+
       btn.disabled = true; btn.textContent = '送信中...';
       try {
         const headers = ['タイムスタンプ', '自分の名前', '所属グループ', ...state.items.filter(it=>it.section==='共通'&&!it.name.includes('所属グループ')).map(it=>it.name), '評価対象', ...state.items.filter(it=>it.section==='個別').map(it=>it.name)];
