@@ -97,19 +97,15 @@
 
       <div class="bg-amber-50 border border-amber-200 rounded p-4 text-xs text-amber-900 space-y-3">
         <p class="font-bold text-amber-950">💡 【管理者・教員向けのトラブル解決チェック項目】</p>
-        <p>「Failed to fetch」エラーが発生している場合、プログラムがGASウェブアプリに接続する前にブラウザ側で遮断されています。以下の対策を実行してください。</p>
+        <p>エラーが発生している場合、プログラムがGASウェブアプリに正常にデータを届けられていない、またはCORS設定の競合が生じています。以下の対策を実行してください。</p>
         <ol class="list-decimal pl-5 space-y-2 text-[11px] text-amber-950">
           <li>
-            <strong>GASの「デプロイバージョン」の更新（最重要）:</strong><br>
-            GASプログラムを変更した際、単に「デプロイ」を押すだけでは反映されません。必ず<strong>「デプロイの管理」 ＞ 「編集（鉛筆アイコン）」 ＞ 「バージョン: 新しいバージョン」</strong>を選択し、デプロイをし直してください。これを行わないとCORS制限エラーで遮断され続けます。
+            <strong>GASの「新しいデプロイ」の実施（必須）:</strong><br>
+            集計用スプレッドシートにバインドされているGASコードを今回提供した新しいコードに上書きした後は、必ず <strong>「デプロイ」 ＞ 「新しいデプロイ」 ＞ 設定を「次のユーザーとして実行: 自分」「アクセスできるユーザー: 全員」</strong> に指定して新規デプロイを実行してください。新しく発行された <code>.../exec</code> URLをConfigシートへ必ず再設定してください。
           </li>
           <li>
-            <strong>実行設定 of GAS:</strong><br>
-            「次のユーザーとして実行」が <strong>「自分（教員アカウント）」</strong>、「アクセスできるユーザー」が <strong>「全員（Anyone）」</strong> になっていることを確認してください。
-          </li>
-          <li>
-            <strong>Config設定シートの確認:</strong><br>
-            Configスプレッドシート（設定シート）に書き込んでいる「集計結果」のURLが、現在指定している <code>.../exec</code> で終わるものと完全一致しているか確認してください。
+            <strong>スプレッドシートIDと書き込み先の整合性:</strong><br>
+            集計用スプレッドシートの1行目に「タイムスタンプ」「自分の名前」「所属グループ」「評価対象」「観点1」などのヘッダー列が正しく揃っているか確認してください。
           </li>
         </ol>
       </div>
@@ -498,15 +494,7 @@
         try {
           resJson = JSON.parse(resText);
         } catch (e) {
-          // GoogleリダイレクトのCORS遮断でレスポンスが空文字またはHTMLであっても、書き込み自体が完了しているか検証
-          if (response.type === 'opaque' || resText === "" || resText.includes("DOCTYPE")) {
-            // スプレッドシート側の追記は確実に完了しているため成功扱いとする
-            document.getElementById('evaluation-form').classList.add('hidden'); 
-            document.getElementById('success-screen').classList.remove('hidden'); 
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            return;
-          }
-          throw new Error(`GASウェブアプリからの返却値がJSONフォーマットではありませんでした。\n\n【返却された生のテキスト】:\n${resText}`);
+          throw new Error(`GASウェブアプリからの返却値がJSONフォーマットではありませんでした。GASの実行中にエラー（スプレッドシートへのアクセス失敗など）が発生した可能性があります。\n\n【返却された生のテキスト】:\n${resText}`);
         }
         
         if (resJson && resJson.status === "success") { 
@@ -517,18 +505,13 @@
           throw new Error(resJson.message || "GAS集計システムが処理に失敗しました。ヘッダー定義などを確認してください。"); 
         }
       } catch (err) {
-        // リダイレクト遮断による TypeError / Failed to fetch であれば書き込み成功と判定して救済
-        if (err.message.includes("Failed to fetch") || err.message.includes("TypeError")) {
-          document.getElementById('evaluation-form').classList.add('hidden'); 
-          document.getElementById('success-screen').classList.remove('hidden'); 
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-          errorMessage.textContent = err.message;
-          errorAlert.classList.remove('hidden');
-          errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          document.getElementById('csv-backup-section').classList.remove('hidden');
-          document.getElementById('csv-backup-area').classList.remove('hidden');
-        }
+        // 【重要】安易な「Failed to fetch」時の自己解決による送信完了画面への強制遷移バグを完全撤廃しました。
+        // 本当に届いていない場合は厳格にここで処理を止め、エラーメッセージとCSVバックアップを提示して不整合を検知させます。
+        errorMessage.textContent = err.message;
+        errorAlert.classList.remove('hidden');
+        errorAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('csv-backup-section').classList.remove('hidden');
+        document.getElementById('csv-backup-area').classList.remove('hidden');
       } finally { 
         btn.disabled = false; 
         btn.textContent = '評価データを送信（登録）する'; 
