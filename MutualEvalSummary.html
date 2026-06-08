@@ -30,7 +30,7 @@
         <div>
           <span class="bg-indigo-600 text-white text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">AUTO REPORT</span>
           <h1 id="app-title" class="text-2xl md:text-3xl font-black text-indigo-400 mt-2">相互評価 リアルタイム集計サマリー</h1>
-          <p class="text-xs text-slate-400 mt-1">集計結果CSVから「評価対象」「評価点」「コメント」「提出状況」を全自動で解析して可視化します。</p>
+          <p class="text-xs text-slate-400 mt-1">集計結果CSVから「評価対象」「評価点」「コメント」「提出状況」を自動でクレンジング解析して可視化します。</p>
         </div>
         <button type="button" onclick="loadDashboardData()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition self-start md:self-auto">
           🔄 データを最新にする
@@ -116,6 +116,14 @@
       results: [],       // 読み込んだ評価結果行データ
       detectedTargets: [], // CSVから自動抽出された「評価対象リスト」
       detectedGroups: [],  // CSVから自動抽出された「回答側グループリスト」
+      
+      // 自動判定されたカラムマッピング名
+      keyMap: {
+        timestamp: '',   // タイムスタンプ
+        evaluator: '',   // 自分の名前
+        group: '',       // 自分のグループ
+        target: ''       // 評価対象
+      },
       pointColumns: [],    // 自動判定された「数値評価カラム」
       textColumns: []      // 自動判定された「コメントカラム」
     };
@@ -124,7 +132,7 @@
     function extractScore(val) {
       if (val === undefined || val === null) return '';
       const match = val.toString().trim().match(/^\d+/);
-      return match ? match[0] : '';
+      return match ? match[0] : val.toString().trim();
     }
 
     // GoogleスプレッドシートからCSVを取得
@@ -200,15 +208,24 @@
 
       try {
         const resultsCsv = await fetchCsv(state.resultSheetUrl);
-        const parsedResults = Papa.parse(resultsCsv, { header: true, skipEmptyLines: true });
+        
+        // PapaParse でパース。ヘッダーのBOM・改行コード・空白を強力にトリミングクレンジングする
+        const parsedResults = Papa.parse(resultsCsv, { 
+          header: true, 
+          skipEmptyLines: true,
+          transformHeader: function(h) {
+            // BOM(\uFEFF)の除去、改行コード(\r, \n)の除去、および前後の余白をトリミング
+            return h.replace(/^\uFEFF/, '').replace(/[\r\n]+/g, '').trim();
+          }
+        });
         
         state.results = parsedResults.data;
         if (state.results.length === 0) {
           throw new Error("スプレッドシートから読み込まれた評価レコードが0件です。まだ誰も評価を送信していない可能性があります。");
         }
 
-        // --- 全自動スキーマ判定 (Auto-Schema Detector) ---
-        detectSchema(parsedResults.meta.fields);
+        // --- 全自動スキーマ判定 ---
+        detectSchema(parsedResults.meta.fields.map(h => h.replace(/^\uFEFF/, '').replace(/[\r\n]+/g, '').trim()));
 
         // UIに状態反映
         document.getElementById('connection-indicator').textContent = "ONLINE 同期成功";
@@ -224,48 +241,68 @@
       }
     }
 
-    // CSVヘッダー列から役割（自分のグループ、評価対象、数値、コメント）を動的に検出するロジック
+    // CSVヘッダー列から役割（自分のグループ、評価対象、数値、コメント）を動的に検出するロジック（揺らぎを許容）
     function detectSchema(fields) {
       state.pointColumns = [];
       state.textColumns = [];
+      state.keyMap = { timestamp: '', evaluator: '', group: '', target: '' };
 
-      // 特徴的な名前からあらかじめ決まっている主キー列をマッピング
       fields.forEach(field => {
         const clean = field.trim();
         if (!clean) return;
 
-        // すでに主キーと判定されたものは数値・記述の自動判定から外す
-        const isPrimaryKey = (
-          clean === "タイムスタンプ" || clean === "Timestamp" ||
-          clean === "自分の名前" || clean === "回答者名" || clean === "EvaluatorName" ||
-          clean === "所属グループ" || clean === "自分のグループ" || clean === "EvaluatorGroup" ||
-          clean === "評価対象" || clean === "TargetName"
-        );
+        // タイムスタンプ
+        if (clean === "タイムスタンプ" || clean.toLowerCase() === "timestamp") {
+          state.keyMap.timestamp = clean;
+        }
+        // 回答者の氏名
+        else if (clean.includes("名前") || clean.includes("回答者") || clean.toLowerCase() === "evaluatorname") {
+          state.keyMap.evaluator = clean;
+        }
+        // 回答者のグループ (「グループ」または「班」が含まれるが、「評価対象」は除外)
+        else if ((clean.includes("グループ") || clean.includes("班")) && !clean.includes("対象")) {
+          state.keyMap.group = clean;
+        }
+        // 評価対象のグループ
+        else if (clean.includes("対象") || clean.toLowerCase() === "targetname") {
+          state.keyMap.target = clean;
+        }
+      });
 
-        if (isPrimaryKey) return;
+      // マップにヒットしなかった基本必須項目に対するセーフティフォールバック
+      if (!state.keyMap.timestamp) state.keyMap.timestamp = fields[0] || 'タイムスタンプ';
+      if (!state.keyMap.evaluator) state.keyMap.evaluator = fields.find(f => f.includes("名前")) || fields[1];
+      if (!state.keyMap.group) state.keyMap.group = fields.find(f => f.includes("グループ") || f.includes("班")) || fields[2];
+      if (!state.keyMap.target) state.keyMap.target = fields.find(f => f.includes("対象")) || fields[3];
 
-        // 数値項目の自動判定: カラム名に「観点」「問」「Q」「評価」「点」が含まれる場合
+      // スコアカラムとテキスト記述カラムの割り当て
+      fields.forEach(field => {
+        const clean = field.trim();
+        if (!clean) return;
+
+        // 基本必須キーは除外
+        if (clean === state.keyMap.timestamp || clean === state.keyMap.evaluator || clean === state.keyMap.group || clean === state.keyMap.target) {
+          return;
+        }
+
+        // 数値項目の判定: 「観点」「問」「Q」「評価」「点」が含まれるか、または末尾が数字などの場合
         if (clean.includes("観点") || clean.includes("評価") || clean.includes("点") || clean.includes("問") || /^q\d+/i.test(clean)) {
           state.pointColumns.push(clean);
         } else {
-          // それ以外をすべてコメント（記述）と判定
+          // それ以外をすべてコメント（自由記述フィードバック）と判定
           state.textColumns.push(clean);
         }
       });
 
       // 評価対象(Target)の重複なきリストを動的に逆算・抽出
-      const rawTargets = state.results.map(row => 
-        row['評価対象'] || row['TargetName']
-      ).filter(Boolean);
+      const rawTargets = state.results.map(row => row[state.keyMap.target]).filter(Boolean);
       state.detectedTargets = [...new Set(rawTargets)].sort();
 
       // 回答者側のグループ(自分のグループ)を動的に逆算・抽出
-      const rawGroups = state.results.map(row => 
-        row['自分のグループ'] || row['所属グループ'] || row['EvaluatorGroup']
-      ).filter(Boolean);
+      const rawGroups = state.results.map(row => row[state.keyMap.group]).filter(Boolean);
       state.detectedGroups = [...new Set(rawGroups)].sort();
 
-      // もし回答者のグループが抽出できなかった場合、評価対象リストを名簿の母体として補完
+      // 万が一、回答側グループ名簿が空だった場合のフォールバック（評価対象から逆算補完）
       if (state.detectedGroups.length === 0) {
         state.detectedGroups = [...state.detectedTargets];
       }
@@ -278,10 +315,8 @@
       // --- 1. 提出監査（名簿対照）の自動分析 ---
       const totalGroups = state.detectedGroups.length;
       
-      // 送信データに記録されている一意な「回答した自分のグループ」を抽出
-      const submittedGroups = [...new Set(state.results.map(row => 
-        row['自分のグループ'] || row['所属グループ'] || row['EvaluatorGroup']
-      ).filter(Boolean))];
+      // 送信データに記録されている「回答した自分のグループ」
+      const submittedGroups = [...new Set(state.results.map(row => row[state.keyMap.group]).filter(Boolean))];
 
       const statSubmitted = submittedGroups.length;
       const statPercent = totalGroups > 0 ? Math.round((statSubmitted / totalGroups) * 100) : 0;
@@ -315,9 +350,7 @@
 
       state.detectedTargets.forEach((targetName, targetIdx) => {
         // この評価対象に対する全レコードを抽出
-        const targetRecords = state.results.filter(row => 
-          row['評価対象'] === targetName || row['TargetName'] === targetName
-        );
+        const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
 
         // A. 観点別グラフカードの構築
         const card = document.createElement('div');
@@ -332,7 +365,7 @@
         `;
 
         state.pointColumns.forEach(columnName => {
-          // この観点に対する全スコアを平均値化（回答値の先頭1文字から安全に数値を抽出）
+          // 観点のスコア平均（回答値の先頭文字から安全に数値を抽出。例: "4：とてもそう思う" ➔ 4）
           const scores = targetRecords.map(row => {
             const rawVal = row[columnName];
             const num = parseInt(extractScore(rawVal));
@@ -377,13 +410,13 @@
           commentsHtml += `<p class="text-xs text-slate-500 text-center py-4">まだこの対象に対するコメントログは登録されていません。</p>`;
         } else {
           targetRecords.forEach((record) => {
-            const sender = record['自分の名前'] || record['回答者名'] || '匿名';
-            const group = record['自分のグループ'] || record['所属グループ'] || record['EvaluatorGroup'] || '不明';
+            const sender = record[state.keyMap.evaluator] || '匿名';
+            const group = record[state.keyMap.group] || '不明';
             commentsHtml += `
               <div class="border-l-4 border-indigo-500 pl-3 py-2 space-y-1.5 text-xs bg-slate-800/80 p-3 rounded-r-lg border border-slate-700/50">
                 <div class="flex justify-between font-bold text-slate-400 border-b border-slate-700 pb-1 text-[10px]">
                   <span>回答者: ${sender} (グループ: ${group})</span>
-                  <span class="font-mono text-slate-500">${record['タイムスタンプ'] || ''}</span>
+                  <span class="font-mono text-slate-500">${record[state.keyMap.timestamp] || ''}</span>
                 </div>
             `;
 
