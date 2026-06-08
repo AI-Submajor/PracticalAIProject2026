@@ -8,16 +8,23 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- PapaParse CDN (CSVパース用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    /* 未入力ハイライト時のトランジション効果 */
+    .error-highlight {
+      border-color: #f43f5e !important;
+      box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.15) !important;
+    }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen pb-16 font-sans">
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-16 font-sans">
 
   <!-- ヘッダーバー -->
-  <div class="bg-slate-950 text-white p-4 sticky top-0 z-50 shadow-md flex justify-between items-center text-xs border-b border-slate-800">
+  <div class="bg-white text-slate-800 p-4 sticky top-0 z-50 shadow-sm flex justify-between items-center text-xs border-b border-slate-200">
     <div class="flex items-center space-x-2">
       <span id="status-dot" class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
-      <span class="font-extrabold text-sm tracking-wider text-slate-200">Mutual Evaluation Dashboard 2026</span>
+      <span class="font-extrabold text-sm tracking-wider text-slate-700">Mutual Evaluation Dashboard 2026</span>
     </div>
-    <div id="connection-indicator" class="bg-slate-800 px-3 py-1 rounded text-slate-300 font-mono text-xs">
+    <div id="connection-indicator" class="bg-slate-100 border border-slate-200 px-3 py-1 rounded text-slate-600 font-mono text-xs">
       データロード待ち...
     </div>
   </div>
@@ -25,60 +32,60 @@
   <div class="max-w-5xl mx-auto px-4 py-8 space-y-8">
     
     <!-- 大タイトル -->
-    <header class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
+    <header class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span class="bg-indigo-600 text-white text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">AUTO REPORT</span>
-          <h1 id="app-title" class="text-2xl md:text-3xl font-black text-indigo-400 mt-2">相互評価 リアルタイム集計サマリー</h1>
-          <p class="text-xs text-slate-400 mt-1">集計結果CSVから「評価対象」「評価点」「コメント」「提出状況」を自動でクレンジング解析して可視化します。</p>
+          <span class="bg-indigo-100 text-indigo-800 text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">REPORT SYSTEM</span>
+          <h1 id="app-title" class="text-2xl md:text-3xl font-black text-indigo-900 mt-2">相互評価 リアルタイム集計サマリー</h1>
+          <p class="text-xs text-slate-500 mt-1">集計結果CSVから「評価対象」「評価点」「コメント」「提出状況」を自動でクレンジング解析して可視化します。</p>
         </div>
-        <button type="button" onclick="loadDashboardData()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition self-start md:self-auto">
+        <button type="button" onclick="loadDashboardData()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all self-start md:self-auto">
           🔄 データを最新にする
         </button>
       </div>
     </header>
 
     <!-- ロード中ステータス表示 -->
-    <div id="loader-notice" class="bg-indigo-950 border border-indigo-800 text-indigo-300 p-4 rounded-xl text-xs md:text-sm font-medium">
+    <div id="loader-notice" class="bg-indigo-50 border border-indigo-100 text-indigo-900 p-4 rounded-xl text-xs md:text-sm font-medium">
       <span id="loader-notice-text">スプレッドシートパラメータを解析しています...</span>
     </div>
 
     <!-- 致命的エラー画面 -->
-    <div id="error-screen" class="hidden bg-rose-950/50 border border-rose-800 text-rose-200 p-6 rounded-2xl shadow-sm">
-      <div class="flex items-center space-x-3 mb-3 text-rose-400">
+    <div id="error-screen" class="hidden bg-rose-50 border border-rose-200 text-rose-950 p-6 rounded-2xl shadow-sm">
+      <div class="flex items-center space-x-3 mb-3 text-rose-700">
         <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
         </svg>
         <h3 class="font-bold text-base md:text-lg">データの同期・取得に失敗しました</h3>
       </div>
-      <p id="error-log-text" class="text-xs md:text-sm leading-relaxed font-mono whitespace-pre-wrap text-rose-300 bg-rose-950/80 p-4 rounded-xl border border-rose-900"></p>
+      <p id="error-log-text" class="text-xs md:text-sm leading-relaxed font-mono whitespace-pre-wrap text-rose-900 bg-rose-100/50 p-4 rounded-xl border border-rose-200" id="error-log-text"></p>
     </div>
 
     <!-- メインコンテンツ領域（ロード完了後に表示） -->
     <main id="dashboard-content" class="hidden space-y-8">
       
       <!-- 1. 提出監査セクション -->
-      <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
-        <h2 class="text-base md:text-lg font-black text-slate-100 mb-4 border-b border-slate-700 pb-2 flex items-center">
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-base md:text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2 flex items-center">
           📊 提出・未提出状況（班対照監査）
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div class="bg-slate-900 p-4 rounded-xl text-center border border-slate-800">
-            <span class="text-xs text-slate-400 font-bold block mb-1">認識された総グループ数</span>
-            <span class="text-3xl font-black text-slate-200" id="stat-total">0</span> <span class="text-xs text-slate-400">グループ</span>
+          <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100">
+            <span class="text-xs text-slate-500 font-bold block mb-1">認識された総グループ数</span>
+            <span class="text-3xl font-black text-slate-800" id="stat-total">0</span> <span class="text-xs text-slate-500">グループ</span>
           </div>
-          <div class="bg-emerald-950/40 p-4 rounded-xl text-center border border-emerald-900/50">
-            <span class="text-xs text-emerald-400 font-bold block mb-1">提出完了</span>
-            <span class="text-3xl font-black text-emerald-400" id="stat-submitted">0</span> <span class="text-xs text-emerald-400">グループ</span>
+          <div class="bg-emerald-50 p-4 rounded-xl text-center border border-emerald-100">
+            <span class="text-xs text-emerald-700 font-bold block mb-1">提出完了</span>
+            <span class="text-3xl font-black text-emerald-600" id="stat-submitted">0</span> <span class="text-xs text-emerald-700">グループ</span>
           </div>
-          <div class="bg-indigo-950/40 p-4 rounded-xl text-center border border-indigo-900/50">
-            <span class="text-xs text-indigo-400 font-bold block mb-1">回答完了率</span>
-            <span class="text-3xl font-black text-indigo-400" id="stat-percent">0%</span>
+          <div class="bg-indigo-50 p-4 rounded-xl text-center border border-indigo-100">
+            <span class="text-xs text-indigo-700 font-bold block mb-1">回答完了率</span>
+            <span class="text-3xl font-black text-indigo-600" id="stat-percent">0%</span>
           </div>
         </div>
         
         <div class="space-y-2">
-          <span class="text-xs font-bold text-slate-400 block">各グループの送信ステータス:</span>
+          <span class="text-xs font-bold text-slate-500 block">各グループの送信ステータス:</span>
           <div id="group-status-list" class="flex flex-wrap gap-2 pt-1">
             <!-- 送信ステータスが色バッジで自動挿入されます -->
           </div>
@@ -86,22 +93,37 @@
       </section>
 
       <!-- 2. 定量スコア平均チャートセクション -->
-      <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
-        <h2 class="text-base md:text-lg font-black text-slate-100 mb-2 border-b border-slate-700 pb-2">
-          📈 評価対象別の観点得点平均サマリー
-        </h2>
-        <p class="text-xs text-slate-400 mb-6">データ行から自動判定された数値評価カラムの平均分布です。グラフは最高得点に対する割合を示します。</p>
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-3 mb-6">
+          <div>
+            <h2 class="text-base md:text-lg font-black text-slate-800">
+              📈 グループ別得点サマリー
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">集計データから算出されたスコアの統計情報です。</p>
+          </div>
+          
+          <!-- 表示形式切り替えタブ -->
+          <div class="flex bg-slate-100 p-1 rounded-xl self-start md:self-auto border border-slate-200">
+            <button type="button" id="tab-btn-target" onclick="switchTab('target')" class="px-4 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm">
+              👥 評価対象別にみる
+            </button>
+            <button type="button" id="tab-btn-criteria" onclick="switchTab('criteria')" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-800">
+              ⚖️ 評価観点（項目）別に比較する
+            </button>
+          </div>
+        </div>
+
         <div id="summary-charts-container" class="space-y-6">
           <!-- スコアカードが動的に挿入されます -->
         </div>
       </section>
 
       <!-- 3. 定性コメントアコーディオン -->
-      <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
-        <h2 class="text-base md:text-lg font-black text-slate-100 mb-2 border-b border-slate-700 pb-2">
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 border-b border-slate-100 pb-2">
           💬 記述フィードバック（評価対象別アコーディオン）
         </h2>
-        <p class="text-xs text-slate-400 mb-6">自由記述コメント（良かった点、改善できる点など）を評価対象グループごとに自動集約しています。</p>
+        <p class="text-xs text-slate-500 mb-6">自由記述コメント（良かった点、改善できる点など）を評価対象グループごとに自動集約しています。</p>
         <div id="feedback-comments-accordion" class="space-y-4">
           <!-- コメントが動的に挿入されます -->
         </div>
@@ -113,9 +135,10 @@
   <script>
     const state = {
       resultSheetUrl: '',
-      results: [],       // 読み込んだ評価結果行データ
-      detectedTargets: [], // CSVから自動抽出された「評価対象リスト」
-      detectedGroups: [],  // CSVから自動抽出された「回答側グループリスト」
+      results: [],         // 読み込んだ評価結果行データ
+      detectedTargets: [],   // CSVから自動抽出された「評価対象リスト」
+      detectedGroups: [],    // CSVから自動抽出された「回答側グループリスト」
+      activeTab: 'target',   // 'target' or 'criteria'
       
       // 自動判定されたカラムマッピング名
       keyMap: {
@@ -196,7 +219,7 @@
       errScreen.classList.remove('hidden');
       document.getElementById('error-log-text').textContent = log;
       document.getElementById('connection-indicator').textContent = "読み込みエラー";
-      document.getElementById('connection-indicator').className = "bg-rose-800 px-3 py-1 rounded text-white font-mono text-xs";
+      document.getElementById('connection-indicator').className = "bg-rose-100 border border-rose-200 px-3 py-1 rounded text-rose-700 font-mono text-xs";
       document.getElementById('status-dot').className = "w-3 h-3 rounded-full bg-rose-500";
     }
 
@@ -229,7 +252,7 @@
 
         // UIに状態反映
         document.getElementById('connection-indicator').textContent = "ONLINE 同期成功";
-        document.getElementById('connection-indicator').className = "bg-green-800 px-3 py-1 rounded text-white font-mono text-xs";
+        document.getElementById('connection-indicator').className = "bg-green-100 border border-green-200 px-3 py-1 rounded text-green-700 font-mono text-xs";
         document.getElementById('status-dot').className = "w-3 h-3 rounded-full bg-green-500 animate-pulse";
         loader.classList.add('hidden');
 
@@ -241,7 +264,7 @@
       }
     }
 
-    // CSVヘッダー列から役割（自分のグループ、評価対象、数値、コメント）を動的に検出するロジック（揺らぎを許容）
+    // CSVヘッダー列から役割を自動判定する
     function detectSchema(fields) {
       state.pointColumns = [];
       state.textColumns = [];
@@ -251,61 +274,68 @@
         const clean = field.trim();
         if (!clean) return;
 
-        // タイムスタンプ
         if (clean === "タイムスタンプ" || clean.toLowerCase() === "timestamp") {
           state.keyMap.timestamp = clean;
         }
-        // 回答者の氏名
         else if (clean.includes("名前") || clean.includes("回答者") || clean.toLowerCase() === "evaluatorname") {
           state.keyMap.evaluator = clean;
         }
-        // 回答者のグループ (「グループ」または「班」が含まれるが、「評価対象」は除外)
         else if ((clean.includes("グループ") || clean.includes("班")) && !clean.includes("対象")) {
           state.keyMap.group = clean;
         }
-        // 評価対象のグループ
         else if (clean.includes("対象") || clean.toLowerCase() === "targetname") {
           state.keyMap.target = clean;
         }
       });
 
-      // マップにヒットしなかった基本必須項目に対するセーフティフォールバック
+      // フォールバック
       if (!state.keyMap.timestamp) state.keyMap.timestamp = fields[0] || 'タイムスタンプ';
       if (!state.keyMap.evaluator) state.keyMap.evaluator = fields.find(f => f.includes("名前")) || fields[1];
       if (!state.keyMap.group) state.keyMap.group = fields.find(f => f.includes("グループ") || f.includes("班")) || fields[2];
       if (!state.keyMap.target) state.keyMap.target = fields.find(f => f.includes("対象")) || fields[3];
 
-      // スコアカラムとテキスト記述カラムの割り当て
       fields.forEach(field => {
         const clean = field.trim();
         if (!clean) return;
 
-        // 基本必須キーは除外
         if (clean === state.keyMap.timestamp || clean === state.keyMap.evaluator || clean === state.keyMap.group || clean === state.keyMap.target) {
           return;
         }
 
-        // 数値項目の判定: 「観点」「問」「Q」「評価」「点」が含まれるか、または末尾が数字などの場合
         if (clean.includes("観点") || clean.includes("評価") || clean.includes("点") || clean.includes("問") || /^q\d+/i.test(clean)) {
           state.pointColumns.push(clean);
         } else {
-          // それ以外をすべてコメント（自由記述フィードバック）と判定
           state.textColumns.push(clean);
         }
       });
 
-      // 評価対象(Target)の重複なきリストを動的に逆算・抽出
       const rawTargets = state.results.map(row => row[state.keyMap.target]).filter(Boolean);
       state.detectedTargets = [...new Set(rawTargets)].sort();
 
-      // 回答者側のグループ(自分のグループ)を動的に逆算・抽出
       const rawGroups = state.results.map(row => row[state.keyMap.group]).filter(Boolean);
       state.detectedGroups = [...new Set(rawGroups)].sort();
 
-      // 万が一、回答側グループ名簿が空だった場合のフォールバック（評価対象から逆算補完）
       if (state.detectedGroups.length === 0) {
         state.detectedGroups = [...state.detectedTargets];
       }
+    }
+
+    // タブ表示の切り替え
+    function switchTab(tabName) {
+      state.activeTab = tabName;
+      
+      const btnTarget = document.getElementById('tab-btn-target');
+      const btnCriteria = document.getElementById('tab-btn-criteria');
+      
+      if (tabName === 'target') {
+        btnTarget.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm border-0";
+        btnCriteria.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-800 border-0";
+      } else {
+        btnTarget.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-800 border-0";
+        btnCriteria.className = "px-4 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm border-0";
+      }
+      
+      renderDashboardCharts();
     }
 
     // ダッシュボード全体の可視化レンダリング
@@ -314,10 +344,7 @@
 
       // --- 1. 提出監査（名簿対照）の自動分析 ---
       const totalGroups = state.detectedGroups.length;
-      
-      // 送信データに記録されている「回答した自分のグループ」
       const submittedGroups = [...new Set(state.results.map(row => row[state.keyMap.group]).filter(Boolean))];
-
       const statSubmitted = submittedGroups.length;
       const statPercent = totalGroups > 0 ? Math.round((statSubmitted / totalGroups) * 100) : 0;
 
@@ -332,91 +359,151 @@
         const isDone = submittedGroups.includes(groupName);
         const span = document.createElement('span');
         if (isDone) {
-          span.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/80 flex items-center gap-1 select-none";
+          span.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 select-none";
           span.innerHTML = `✓ ${groupName}`;
         } else {
-          span.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-950 text-rose-300 border border-rose-900 flex items-center gap-1 animate-pulse select-none";
+          span.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1 animate-pulse select-none";
           span.innerHTML = `未 ${groupName}`;
         }
         statusListCont.appendChild(span);
       });
 
-      // --- 2. 各評価対象の定量観点スコア平均計算 ---
+      // チャート表示とコメント表示を個別に処理
+      renderDashboardCharts();
+      renderDashboardComments();
+    }
+
+    // グラフのレンダリング
+    function renderDashboardCharts() {
       const chartsCont = document.getElementById('summary-charts-container');
       chartsCont.innerHTML = '';
 
+      if (state.activeTab === 'target') {
+        // --- 従来ビュー: 評価対象（チーム）ごとに観点をまとめる ---
+        state.detectedTargets.forEach((targetName, targetIdx) => {
+          const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
+
+          const card = document.createElement('div');
+          card.className = "bg-white border border-slate-200 p-5 rounded-2xl space-y-4 shadow-sm transition-all duration-300";
+          
+          let cardHtml = `
+            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 class="font-extrabold text-indigo-900 text-lg">${targetName}</h3>
+              <span class="text-xs font-mono font-bold bg-slate-100 px-2.5 py-1 rounded-md text-slate-600 border border-slate-200">被評価数: ${targetRecords.length}件</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          `;
+
+          state.pointColumns.forEach(columnName => {
+            const scores = targetRecords.map(row => {
+              const rawVal = row[columnName];
+              const num = parseInt(extractScore(rawVal));
+              return isNaN(num) ? null : num;
+            }).filter(val => val !== null);
+
+            const sum = scores.reduce((a, b) => a + b, 0);
+            const avg = scores.length > 0 ? (sum / scores.length).toFixed(2) : '0.00';
+            const percent = scores.length > 0 ? (avg / 4) * 100 : 0;
+
+            cardHtml += `
+              <div class="space-y-1">
+                <div class="flex justify-between text-xs font-bold text-slate-700">
+                  <span class="truncate pr-2" title="${columnName}">${columnName}</span>
+                  <span class="font-mono text-indigo-600">${avg} / 4.00</span>
+                </div>
+                <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+                  <div class="bg-indigo-600 h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+                </div>
+              </div>
+            `;
+          });
+
+          cardHtml += `</div>`;
+          card.innerHTML = cardHtml;
+          chartsCont.appendChild(card);
+        });
+      } else {
+        // --- 新規ビュー: 各観点（項目）ごとに全チームのスコアを横並びで比較する ---
+        state.pointColumns.forEach((columnName, colIdx) => {
+          const card = document.createElement('div');
+          card.className = "bg-white border border-slate-200 p-5 rounded-2xl space-y-4 shadow-sm transition-all duration-300";
+          
+          let cardHtml = `
+            <div class="border-b border-slate-100 pb-2 mb-4">
+              <h3 class="font-extrabold text-indigo-900 text-base md:text-lg">${columnName}</h3>
+            </div>
+            <div class="space-y-4">
+          `;
+
+          // 全ターゲットチームについてこの観点の平均点を動的に算出
+          state.detectedTargets.forEach(targetName => {
+            const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
+            const scores = targetRecords.map(row => {
+              const rawVal = row[columnName];
+              const num = parseInt(extractScore(rawVal));
+              return isNaN(num) ? null : num;
+            }).filter(val => val !== null);
+
+            const sum = scores.reduce((a, b) => a + b, 0);
+            const avg = scores.length > 0 ? (sum / scores.length) : 0;
+            const avgStr = scores.length > 0 ? avg.toFixed(2) : '0.00';
+            const percent = scores.length > 0 ? (avg / 4) * 100 : 0;
+
+            cardHtml += `
+              <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+                <div class="w-full sm:w-1/4 font-bold text-xs text-slate-700 truncate" title="${targetName}">
+                  ${targetName}
+                </div>
+                <div class="flex-1 bg-slate-100 h-6 rounded-lg overflow-hidden border border-slate-200 relative flex items-center">
+                  <div class="bg-indigo-600 h-full rounded-l-lg transition-all duration-500" style="width: ${percent}%"></div>
+                  <span class="absolute left-3 text-[10px] font-black tracking-wide ${percent > 12 ? 'text-white' : 'text-slate-600'}">
+                    ${avgStr} 点
+                  </span>
+                </div>
+                <div class="text-[10px] font-mono text-slate-400 w-16 text-right sm:block hidden">
+                  ${scores.length}件の回答
+                </div>
+              </div>
+            `;
+          });
+
+          cardHtml += `</div>`;
+          card.innerHTML = cardHtml;
+          chartsCont.appendChild(card);
+        });
+      }
+    }
+
+    // コメントフィードバックのレンダリング
+    function renderDashboardComments() {
       const commentsCont = document.getElementById('feedback-comments-accordion');
       commentsCont.innerHTML = '';
 
       state.detectedTargets.forEach((targetName, targetIdx) => {
-        // この評価対象に対する全レコードを抽出
         const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
-
-        // A. 観点別グラフカードの構築
-        const card = document.createElement('div');
-        card.className = "bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-sm";
-        
-        let cardHtml = `
-          <div class="flex justify-between items-center border-b border-slate-700 pb-2">
-            <h3 class="font-extrabold text-indigo-400 text-lg">${targetName}</h3>
-            <span class="text-xs font-mono font-bold bg-slate-700 px-2.5 py-1 rounded-md text-slate-300 border border-slate-600">評価数: ${targetRecords.length}件</span>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        `;
-
-        state.pointColumns.forEach(columnName => {
-          // 観点のスコア平均（回答値の先頭文字から安全に数値を抽出。例: "4：とてもそう思う" ➔ 4）
-          const scores = targetRecords.map(row => {
-            const rawVal = row[columnName];
-            const num = parseInt(extractScore(rawVal));
-            return isNaN(num) ? null : num;
-          }).filter(val => val !== null);
-
-          const sum = scores.reduce((a, b) => a + b, 0);
-          const avg = scores.length > 0 ? (sum / scores.length).toFixed(2) : '0.00';
-          const percent = scores.length > 0 ? (avg / 4) * 100 : 0; // 基本的に4点満点基準でグラフ比率を表示
-
-          cardHtml += `
-            <div class="space-y-1">
-              <div class="flex justify-between text-xs font-bold text-slate-300">
-                <span class="truncate pr-2" title="${columnName}">${columnName}</span>
-                <span class="font-mono text-indigo-400">${avg} / 4.00</span>
-              </div>
-              <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
-                <div class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
-              </div>
-            </div>
-          `;
-        });
-
-        cardHtml += `</div>`;
-        card.innerHTML = cardHtml;
-        chartsCont.appendChild(card);
-
-        // B. 定性記述（コメント）アコーディオンカードの構築
         const accId = `acc-target-${targetIdx}`;
         const accDiv = document.createElement('div');
-        accDiv.className = "border border-slate-700 rounded-xl bg-slate-800 overflow-hidden shadow-sm";
+        accDiv.className = "border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm";
 
         let commentsHtml = `
-          <button type="button" onclick="document.getElementById('${accId}').classList.toggle('hidden')" class="w-full flex justify-between items-center p-4 bg-slate-850 hover:bg-slate-700/50 font-bold text-slate-200 text-left border-b border-slate-700 transition">
+          <button type="button" onclick="document.getElementById('${accId}').classList.toggle('hidden')" class="w-full flex justify-between items-center p-4 bg-slate-50 hover:bg-slate-100 font-bold text-slate-800 text-left border-b border-slate-200 transition-all outline-none">
             <span>💬 ${targetName} へのフィードバック一覧</span>
-            <span class="text-xs text-indigo-300 font-mono bg-indigo-950 border border-indigo-900 px-3 py-1 rounded-full">コメント: ${targetRecords.length}件</span>
+            <span class="text-xs text-indigo-600 font-mono bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">コメント: ${targetRecords.length}件</span>
           </button>
-          <div id="${accId}" class="hidden p-4 space-y-4 bg-slate-900 max-h-96 overflow-y-auto">
+          <div id="${accId}" class="hidden p-4 space-y-4 bg-slate-50/30 max-h-96 overflow-y-auto">
         `;
 
         if (targetRecords.length === 0) {
-          commentsHtml += `<p class="text-xs text-slate-500 text-center py-4">まだこの対象に対するコメントログは登録されていません。</p>`;
+          commentsHtml += `<p class="text-xs text-slate-400 text-center py-4">まだこの対象に対するコメントログは登録されていません。</p>`;
         } else {
           targetRecords.forEach((record) => {
             const sender = record[state.keyMap.evaluator] || '匿名';
             const group = record[state.keyMap.group] || '不明';
             commentsHtml += `
-              <div class="border-l-4 border-indigo-500 pl-3 py-2 space-y-1.5 text-xs bg-slate-800/80 p-3 rounded-r-lg border border-slate-700/50">
-                <div class="flex justify-between font-bold text-slate-400 border-b border-slate-700 pb-1 text-[10px]">
+              <div class="border border-slate-200 pl-3 py-2 space-y-1.5 text-xs bg-white p-3 rounded-xl shadow-sm border-l-4 border-l-indigo-600">
+                <div class="flex justify-between font-bold text-slate-500 border-b border-slate-100 pb-1 text-[10px]">
                   <span>回答者: ${sender} (グループ: ${group})</span>
-                  <span class="font-mono text-slate-500">${record[state.keyMap.timestamp] || ''}</span>
+                  <span class="font-mono text-slate-400">${record[state.keyMap.timestamp] || ''}</span>
                 </div>
             `;
 
@@ -424,8 +511,8 @@
               const textVal = record[columnName] || '（未記入）';
               commentsHtml += `
                 <div class="pt-1">
-                  <span class="font-extrabold text-indigo-400 text-[10px] block">■ ${columnName}</span>
-                  <p class="leading-relaxed text-slate-300 whitespace-pre-wrap mt-0.5">${textVal}</p>
+                  <span class="font-extrabold text-indigo-700 text-[10px] block">■ ${columnName}</span>
+                  <p class="leading-relaxed text-slate-700 whitespace-pre-wrap mt-0.5">${textVal}</p>
                 </div>
               `;
             });
