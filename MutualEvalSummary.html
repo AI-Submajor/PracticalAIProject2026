@@ -51,7 +51,7 @@
     </div>
 
     <!-- 致命的エラー画面 -->
-    <div id="error-screen" class="hidden bg-rose-50 border border-rose-200 text-rose-950 p-6 rounded-2xl shadow-sm">
+    <div id="error-screen" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-950 p-6 rounded-2xl shadow-sm">
       <div class="flex items-center space-x-3 mb-3 text-rose-700">
         <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
@@ -92,22 +92,42 @@
         </div>
       </section>
 
-      <!-- 2. 定量スコア平均チャートセクション -->
+      <!-- 2. 総合評価マトリクス一覧表（新規要望セクション） -->
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 border-b border-slate-100 pb-2 flex items-center">
+          📋 総合評価スコアマトリクス一覧表
+        </h2>
+        <p class="text-xs text-slate-500 mb-4">各チーム（評価対象）の各観点の平均値、および全観点の総合平均値をまとめた一覧表です。</p>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-sm text-left text-slate-600 border-collapse">
+            <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+              <tr id="matrix-header">
+                <!-- 動的ヘッダー -->
+              </tr>
+            </thead>
+            <tbody id="matrix-body" class="divide-y divide-slate-100">
+              <!-- 動的データ行 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 3. 定量スコア平均チャートセクション -->
       <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-3 mb-6">
           <div>
             <h2 class="text-base md:text-lg font-black text-slate-800">
-              📈 グループ別得点サマリー
+              📈 グループ別得点詳細サマリー
             </h2>
-            <p class="text-xs text-slate-500 mt-1">集計データから算出されたスコアの統計情報です。</p>
+            <p class="text-xs text-slate-500 mt-1">「観点」から始まる数値項目の詳細平均値です。</p>
           </div>
           
           <!-- 表示形式切り替えタブ -->
           <div class="flex bg-slate-100 p-1 rounded-xl self-start md:self-auto border border-slate-200">
-            <button type="button" id="tab-btn-target" onclick="switchTab('target')" class="px-4 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm">
+            <button type="button" id="tab-btn-target" onclick="switchTab('target')" class="px-4 py-2 text-xs font-bold rounded-lg transition-all bg-white text-indigo-600 shadow-sm border-0">
               👥 評価対象別にみる
             </button>
-            <button type="button" id="tab-btn-criteria" onclick="switchTab('criteria')" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-800">
+            <button type="button" id="tab-btn-criteria" onclick="switchTab('criteria')" class="px-4 py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-800 border-0">
               ⚖️ 評価観点（項目）別に比較する
             </button>
           </div>
@@ -118,7 +138,7 @@
         </div>
       </section>
 
-      <!-- 3. 定性コメントアコーディオン -->
+      <!-- 4. 定性コメントアコーディオン -->
       <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 border-b border-slate-100 pb-2">
           💬 記述フィードバック（評価対象別アコーディオン）
@@ -264,7 +284,7 @@
       }
     }
 
-    // CSVヘッダー列から役割を自動判定する
+    // CSVヘッダー列から役割を自動判定する（「観点」から始まるものに限定して評価数値と判定）
     function detectSchema(fields) {
       state.pointColumns = [];
       state.textColumns = [];
@@ -302,9 +322,11 @@
           return;
         }
 
-        if (clean.includes("観点") || clean.includes("評価") || clean.includes("点") || clean.includes("問") || /^q\d+/i.test(clean)) {
+        // 【要望(1)への完全対応】 観点の選択値の評価判定を、「観点」から始まるものに厳格に限定
+        if (clean.startsWith("観点")) {
           state.pointColumns.push(clean);
         } else {
+          // それ以外の自由記述はすべてコメントと判定
           state.textColumns.push(clean);
         }
       });
@@ -368,12 +390,84 @@
         statusListCont.appendChild(span);
       });
 
-      // チャート表示とコメント表示を個別に処理
+      // マトリクス一覧表のレンダリング、チャート表示、コメント表示を個別に処理
+      renderDashboardMatrix();
       renderDashboardCharts();
       renderDashboardComments();
     }
 
-    // グラフのレンダリング
+    // 【要望への完全対応】総合評価マトリクス一覧表のレンダリング
+    function renderDashboardMatrix() {
+      const headerRow = document.getElementById('matrix-header');
+      const bodyRow = document.getElementById('matrix-body');
+      
+      headerRow.innerHTML = '';
+      bodyRow.innerHTML = '';
+
+      // 1. ヘッダーの生成
+      let headerHtml = `
+        <th scope="col" class="px-6 py-3 font-extrabold text-slate-700 bg-slate-100 rounded-tl-xl border border-slate-200">評価対象（チーム）</th>
+      `;
+      state.pointColumns.forEach(columnName => {
+        headerHtml += `
+          <th scope="col" class="px-4 py-3 font-extrabold text-slate-700 text-center border border-slate-200 max-w-[150px] truncate" title="${columnName}">
+            ${columnName.split('：')[0] || columnName}
+          </th>
+        `;
+      });
+      // 全観点平均とサンプル数のヘッダーを追加
+      headerHtml += `
+        <th scope="col" class="px-4 py-3 font-black text-indigo-700 bg-indigo-50 text-center border border-slate-200">全観点平均</th>
+        <th scope="col" class="px-4 py-3 font-bold text-slate-500 text-center border border-slate-200 rounded-tr-xl">評価数</th>
+      `;
+      headerRow.innerHTML = headerHtml;
+
+      // 2. データのマッピングと行の追加
+      state.detectedTargets.forEach(targetName => {
+        const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
+        
+        let rowHtml = `
+          <td class="px-6 py-4 font-bold text-slate-900 border border-slate-200 bg-white">${targetName}</td>
+        `;
+
+        let allScores = [];
+
+        // 各観点の平均スコア
+        state.pointColumns.forEach(columnName => {
+          const scores = targetRecords.map(row => {
+            const rawVal = row[columnName];
+            const num = parseInt(extractScore(rawVal));
+            return isNaN(num) ? null : num;
+          }).filter(val => val !== null);
+
+          const sum = scores.reduce((a, b) => a + b, 0);
+          const avg = scores.length > 0 ? (sum / scores.length).toFixed(2) : '-';
+          
+          rowHtml += `
+            <td class="px-4 py-4 text-center font-mono font-semibold text-slate-700 border border-slate-200 bg-white">${avg}</td>
+          `;
+
+          // 全観点平均の算出用にプールに貯める
+          allScores = allScores.concat(scores);
+        });
+
+        // 全観点の単純平均値を計算
+        const allSum = allScores.reduce((a, b) => a + b, 0);
+        const allAvg = allScores.length > 0 ? (allSum / allScores.length).toFixed(2) : '-';
+
+        rowHtml += `
+          <td class="px-4 py-4 text-center font-mono font-black text-indigo-700 bg-indigo-50/50 border border-slate-200">${allAvg}</td>
+          <td class="px-4 py-4 text-center font-mono text-slate-400 border border-slate-200 bg-white">${targetRecords.length}</td>
+        `;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/80 transition-colors";
+        tr.innerHTML = rowHtml;
+        bodyRow.appendChild(tr);
+      });
+    }
+
+    // グラフのレンダリング（全観点平均の表示を含む）
     function renderDashboardCharts() {
       const chartsCont = document.getElementById('summary-charts-container');
       chartsCont.innerHTML = '';
@@ -384,14 +478,23 @@
           const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
 
           const card = document.createElement('div');
-          card.className = "bg-white border border-slate-200 p-5 rounded-2xl space-y-4 shadow-sm transition-all duration-300";
+          card.className = "bg-white border border-slate-200 p-6 rounded-2xl space-y-4 shadow-sm transition-all duration-300";
+          
+          // 各カード用の全観点平均値を算出
+          let allScores = [];
           
           let cardHtml = `
-            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-              <h3 class="font-extrabold text-indigo-900 text-lg">${targetName}</h3>
-              <span class="text-xs font-mono font-bold bg-slate-100 px-2.5 py-1 rounded-md text-slate-600 border border-slate-200">被評価数: ${targetRecords.length}件</span>
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 class="font-extrabold text-indigo-900 text-lg">${targetName}</h3>
+                <span class="text-xs font-mono text-slate-400">被評価数: ${targetRecords.length}件</span>
+              </div>
+              <div class="text-right">
+                <span class="text-[10px] font-black tracking-widest text-indigo-500 uppercase block">ALL CRITERIA AVG</span>
+                <span class="text-2xl font-black text-indigo-600 font-mono" id="all-avg-${targetIdx}">---</span>
+              </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
           `;
 
           state.pointColumns.forEach(columnName => {
@@ -409,21 +512,29 @@
               <div class="space-y-1">
                 <div class="flex justify-between text-xs font-bold text-slate-700">
                   <span class="truncate pr-2" title="${columnName}">${columnName}</span>
-                  <span class="font-mono text-indigo-600">${avg} / 4.00</span>
+                  <span class="font-mono text-slate-800">${avg} / 4.00</span>
                 </div>
                 <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
                   <div class="bg-indigo-600 h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
                 </div>
               </div>
             `;
+
+            allScores = allScores.concat(scores);
           });
 
           cardHtml += `</div>`;
           card.innerHTML = cardHtml;
           chartsCont.appendChild(card);
+
+          // 全観点平均値のリアルタイム書き込み
+          const allSum = allScores.reduce((a, b) => a + b, 0);
+          const allAvg = allScores.length > 0 ? (allSum / allScores.length).toFixed(2) : '0.00';
+          document.getElementById(`all-avg-${targetIdx}`).textContent = `${allAvg} / 4.00`;
         });
       } else {
         // --- 新規ビュー: 各観点（項目）ごとに全チームのスコアを横並びで比較する ---
+        // 1. 各観点カラムの比較
         state.pointColumns.forEach((columnName, colIdx) => {
           const card = document.createElement('div');
           card.className = "bg-white border border-slate-200 p-5 rounded-2xl space-y-4 shadow-sm transition-all duration-300";
@@ -435,7 +546,6 @@
             <div class="space-y-4">
           `;
 
-          // 全ターゲットチームについてこの観点の平均点を動的に算出
           state.detectedTargets.forEach(targetName => {
             const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
             const scores = targetRecords.map(row => {
@@ -471,6 +581,60 @@
           card.innerHTML = cardHtml;
           chartsCont.appendChild(card);
         });
+
+        // 2. 【全観点総合平均】での比較カードを追加描画
+        const totalCard = document.createElement('div');
+        totalCard.className = "bg-white border-2 border-indigo-200 p-5 rounded-2xl space-y-4 shadow-sm transition-all duration-300 bg-indigo-50/10";
+        
+        let totalHtml = `
+          <div class="border-b border-indigo-100 pb-2 mb-4 flex justify-between items-center">
+            <h3 class="font-extrabold text-indigo-950 text-base md:text-lg flex items-center gap-1.5">
+              👑 全観点（総合平均スコア）比較
+            </h3>
+            <span class="text-[9px] font-black bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">OVERALL COMPARISON</span>
+          </div>
+          <div class="space-y-4">
+        `;
+
+        state.detectedTargets.forEach(targetName => {
+          const targetRecords = state.results.filter(row => row[state.keyMap.target] === targetName);
+          let allScores = [];
+
+          state.pointColumns.forEach(columnName => {
+            const scores = targetRecords.map(row => {
+              const rawVal = row[columnName];
+              const num = parseInt(extractScore(rawVal));
+              return isNaN(num) ? null : num;
+            }).filter(val => val !== null);
+            allScores = allScores.concat(scores);
+          });
+
+          const sum = allScores.reduce((a, b) => a + b, 0);
+          const avg = allScores.length > 0 ? (sum / allScores.length) : 0;
+          const avgStr = allScores.length > 0 ? avg.toFixed(2) : '0.00';
+          const percent = allScores.length > 0 ? (avg / 4) * 100 : 0;
+
+          totalHtml += `
+            <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+              <div class="w-full sm:w-1/4 font-black text-xs text-slate-800 truncate" title="${targetName}">
+                ${targetName}
+              </div>
+              <div class="flex-1 bg-slate-100 h-6 rounded-lg overflow-hidden border border-slate-200 relative flex items-center shadow-inner">
+                <div class="bg-indigo-600 h-full rounded-l-lg transition-all duration-500" style="width: ${percent}%"></div>
+                <span class="absolute left-3 text-[10px] font-black tracking-wide ${percent > 12 ? 'text-white' : 'text-slate-600'}">
+                  ${avgStr} 点
+                </span>
+              </div>
+              <div class="text-[10px] font-mono text-indigo-400 w-16 text-right sm:block hidden">
+                ${allScores.length}点の合計数
+              </div>
+            </div>
+          `;
+        });
+
+        totalHtml += `</div>`;
+        totalCard.innerHTML = totalHtml;
+        chartsCont.appendChild(totalCard);
       }
     }
 
