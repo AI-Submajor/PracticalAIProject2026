@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>予測・実績 精度分析ダッシュボード</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PapaParse CDN (CSVパース用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-16 font-sans">
+
+  <!-- ヘッダーシステムバー -->
+  <div class="bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-md flex justify-between items-center text-xs">
+    <div class="flex items-center space-x-2">
+      <span id="status-dot" class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+      <span class="font-extrabold text-sm tracking-wider text-slate-200">Prediction vs Actual Analysis System</span>
+    </div>
+    <div id="connection-indicator" class="bg-slate-800 border border-slate-700 px-3 py-1 rounded text-slate-300 font-mono text-xs">
+      データ同期中...
+    </div>
+  </div>
+
+  <div class="max-w-5xl mx-auto px-4 py-8 space-y-8">
+    
+    <!-- 大タイトルヘッダー -->
+    <header class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <span class="bg-indigo-100 text-indigo-800 text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">ACCURACY CHALLENGE</span>
+          <h1 id="app-title" class="text-2xl md:text-3xl font-black text-indigo-900 mt-2">予測値・実績値 精度分析サマリー</h1>
+          <p class="text-xs text-slate-500 mt-1">提出された予測データと、確定した実績データの誤差（絶対誤差）を瞬時に計算し、予測精度を可視化します。</p>
+        </div>
+        <button type="button" onclick="loadDashboardData()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all self-start md:self-auto">
+          🔄 データを最新にする
+        </button>
+      </div>
+    </header>
+
+    <!-- 同期進捗インジケーター -->
+    <div id="loader-notice" class="bg-indigo-50 border border-indigo-100 text-indigo-900 p-4 rounded-xl text-xs md:text-sm font-medium">
+      <span id="loader-notice-text">スプレッドシートおよび予測・実績パラメータをパースしています...</span>
+    </div>
+
+    <!-- 致命的エラー画面 -->
+    <div id="error-screen" class="hidden bg-rose-50 border-2 border-rose-300 text-rose-950 p-6 rounded-2xl shadow-sm">
+      <div class="flex items-center space-x-3 mb-3 text-rose-700">
+        <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <h3 class="font-bold text-base md:text-lg">データの同期・取得に失敗しました</h3>
+      </div>
+      <p id="error-log-text" class="text-xs md:text-sm leading-relaxed font-mono whitespace-pre-wrap text-rose-900 bg-rose-100/50 p-4 rounded-xl border border-rose-200"></p>
+    </div>
+
+    <!-- メインコンテンツ領域（同期完了後に表示） -->
+    <main id="dashboard-content" class="hidden space-y-8">
+      
+      <!-- 実績確定値のステータスボード -->
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-base md:text-lg font-black text-slate-800 mb-4 border-b border-slate-100 pb-2 flex items-center">
+          🎯 確定実績値（正解数値）
+        </h2>
+        <div class="flex items-center">
+          <div class="px-6 py-4 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-900 flex items-center gap-4 text-sm font-bold shadow-sm">
+            <span class="text-slate-500 text-base">実績値 (Actual):</span>
+            <span class="font-mono text-indigo-700 text-2xl font-black" id="actual-value-display">0</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 予測精度ランキング（降順：絶対誤差の小さい順ソート＆金銀王冠） -->
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 border-b border-slate-100 pb-2 flex items-center">
+          🏆 予測精度ランキング一覧表 (誤差の少ない順)
+        </h2>
+        <p class="text-xs text-slate-500 mb-4">確定した実績値との差（絶対誤差）を自動算出。誤差が最も少ない優秀なチームから順番にソートして並べています。</p>
+        
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-sm text-left text-slate-600 border-collapse">
+            <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th scope="col" class="px-6 py-3.5 font-black text-slate-700 bg-slate-100 rounded-tl-xl border border-slate-200">順位 / チーム名</th>
+                <th scope="col" class="px-4 py-3.5 font-black text-slate-700 text-center border border-slate-200">予測値</th>
+                <th scope="col" class="px-4 py-3.5 font-black text-slate-700 text-center border border-slate-200">実績値</th>
+                <th scope="col" class="px-4 py-3.5 font-black text-indigo-700 bg-indigo-50 text-center border border-slate-200">絶対誤差</th>
+                <th scope="col" class="px-4 py-3.5 font-black text-indigo-700 bg-indigo-50 text-center border border-slate-200 rounded-tr-xl">誤差率</th>
+              </tr>
+            </thead>
+            <tbody id="matrix-body" class="divide-y divide-slate-100">
+              <!-- 動的データ行 -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 予測対象ごとのビジュアル比較チャート -->
+      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 border-b border-slate-100 pb-2">
+          📊 グループ別予測精度比較グラフ
+        </h2>
+        <p class="text-xs text-slate-500 mb-6">確定実績値（赤い点線）に対して、各グループが提示した予測値のズレを視覚的に比較します（最も優秀なチームから順に上から並んでいます）。</p>
+        <div id="summary-charts-container" class="space-y-4">
+          <!-- グラフが動的に挿入されます -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      resultSheetUrl: '',  // 予測提出データのCSV URL
+      actualValue: 0,      // 実績値（URLパラメータ `actual` から取得した単一数値）
+      results: [],         // 読み込まれた全提出予測データ
+      
+      // 自動抽出されたメタ情報
+      detectedData: [],    // 整理された各グループの予測結果オブジェクト配列
+      
+      keyMap: {
+        groupName: '',     // グループ名列
+        predictValue: ''   // 予測値列
+      }
+    };
+
+    // 数値を安全にパース
+    function cleanNumber(val) {
+      if (val === undefined || val === null) return 0;
+      const clean = val.toString().replace(/,/g, '').trim();
+      const num = parseFloat(clean);
+      return isNaN(num) ? 0 : num;
+    }
+
+    // GoogleスプレッドシートからCSVを取得
+    async function fetchCsv(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTPエラー [ステータス: ${response.status}]`);
+      const text = await response.text();
+      
+      const clean = text.trim();
+      if (clean.startsWith('<!DOCTYPE') || clean.startsWith('<html') || clean.startsWith('<xml')) {
+        throw new Error("指定されたURLからCSVデータを正常にフェッチできませんでした。スプレッドシートが「Webに公開（カンマ区切り値.csv）」で公開されているかご確認ください。");
+      }
+      return text;
+    }
+
+    // スプレッドシートURLを公開CSVの形に動的変換
+    function cleanSheetUrl(url) {
+      if (!url) return '';
+      let target = url.trim();
+      if (target.includes('/edit')) {
+        return target.split('/edit')[0] + '/export?format=csv';
+      } else if (target.includes('/pubhtml')) {
+        return target.split('/pubhtml')[0] + '/pub?output=csv';
+      }
+      return target;
+    }
+
+    // 起動初期設定
+    window.onload = async function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      let resultParam = urlParams.get('result') || urlParams.get('config'); 
+      let actualParam = urlParams.get('actual'); 
+
+      // URLパラメータの結合崩れパッチ
+      const href = window.location.href;
+      const resultMatch = href.match(/[?&](result|config)=([\s\S]+?)(?:&|$)/);
+      if (resultMatch) {
+        resultParam = decodeURIComponent(resultMatch[2]);
+      }
+      const actualMatch = href.match(/[?&]actual=([\s\S]+?)(?:&|$)/);
+      if (actualMatch) {
+        actualParam = decodeURIComponent(actualMatch[1]);
+      }
+
+      if (!resultParam) {
+        showFatalError("URLパラメータにグループ予測値リスト（`?result=...`）が指定されていません。\n\n[正しいURL例]:\nPredictionVsActualSummary.html?result=【CSVのURL】&actual=1947");
+        return;
+      }
+
+      state.resultSheetUrl = cleanSheetUrl(resultParam);
+      // 単一数値を実績値としてパース
+      state.actualValue = cleanNumber(actualParam);
+      document.getElementById('actual-value-display').textContent = state.actualValue.toLocaleString();
+
+      loadDashboardData();
+    };
+
+    function updateLoaderNotice(msg) {
+      document.getElementById('loader-notice-text').textContent = msg;
+    }
+
+    function showFatalError(log) {
+      document.getElementById('loader-notice').classList.add('hidden');
+      const errScreen = document.getElementById('error-screen');
+      errScreen.classList.remove('hidden');
+      document.getElementById('error-log-text').textContent = log;
+      document.getElementById('connection-indicator').textContent = "エラー";
+      document.getElementById('connection-indicator').className = "bg-rose-100 border border-rose-200 px-3 py-1 rounded text-rose-700 font-mono text-xs";
+      document.getElementById('status-dot').className = "w-3 h-3 rounded-full bg-rose-500";
+    }
+
+    // 最新データ同期と解析
+    async function loadDashboardData() {
+      const loader = document.getElementById('loader-notice');
+      loader.classList.remove('hidden');
+      updateLoaderNotice('予測CSV結果を取得・自動パースしています...');
+
+      try {
+        const resultsCsv = await fetchCsv(state.resultSheetUrl);
+        
+        // ヘッダーのクレンジングを行いながらCSVを読み込み
+        const parsedResults = Papa.parse(resultsCsv, { 
+          header: true, 
+          skipEmptyLines: true,
+          transformHeader: function(h) {
+            return h.replace(/^\uFEFF/, '').replace(/[\r\n]+/g, '').trim();
+          }
+        });
+        
+        state.results = parsedResults.data;
+        if (state.results.length === 0) {
+          throw new Error("予測結果データが0件です。CSVデータが空でないかご確認ください。");
+        }
+
+        // 1. スキーマ構成（「グループ」列と「予測値」列）の自動判定
+        detectSchema(parsedResults.meta.fields.map(h => h.replace(/^\uFEFF/, '').replace(/[\r\n]+/g, '').trim()));
+
+        // UI切り替え
+        document.getElementById('connection-indicator').textContent = "ONLINE 同期成功";
+        document.getElementById('connection-indicator').className = "bg-green-100 border border-green-200 px-3 py-1 rounded text-green-700 font-mono text-xs";
+        document.getElementById('status-dot').className = "w-3 h-3 rounded-full bg-green-500 animate-pulse";
+        loader.classList.add('hidden');
+
+        // 計算・レンダリング実行
+        calculateAccuracy();
+        renderDashboard();
+
+      } catch (err) {
+        showFatalError(`データ解析に失敗しました。\n[result-url]: ${state.resultSheetUrl}\n[actual-value]: ${state.actualValue}\n\n【詳細エラー】: ${err.message}`);
+      }
+    }
+
+    // CSVヘッダー列から自動で予測値項目とチーム名を逆算・検出する
+    function detectSchema(fields) {
+      state.keyMap = { groupName: '', predictValue: '' };
+
+      fields.forEach(field => {
+        const clean = field.trim();
+        if (!clean) return;
+
+        // グループ名列の抽出
+        if (clean === "グループ" || clean.includes("グループ") || clean.includes("チーム") || clean.includes("名")) {
+          state.keyMap.groupName = clean;
+        }
+        // 予測値列の抽出
+        else if (clean === "予測値" || clean.includes("予測") || clean.includes("値") || clean.includes("数値")) {
+          state.keyMap.predictValue = clean;
+        }
+      });
+
+      // 判定に失敗した場合のデフォルトフォールバック
+      if (!state.keyMap.groupName) state.keyMap.groupName = fields[0];
+      if (!state.keyMap.predictValue) state.keyMap.predictValue = fields[1] || fields[0];
+    }
+
+    // 各グループの予測誤差を計算して優秀順（絶対誤差が小さい順）に並べ替え
+    function calculateAccuracy() {
+      const list = state.results.map(row => {
+        const name = row[state.keyMap.groupName] ? row[state.keyMap.groupName].trim() : '不明';
+        const predicted = cleanNumber(row[state.keyMap.predictValue]);
+        const absError = Math.abs(predicted - state.actualValue);
+        // 実績値に対する誤差率
+        const errorRate = state.actualValue > 0 ? (absError / state.actualValue) * 100 : 0;
+
+        return {
+          groupName: name,
+          predicted: predicted,
+          absError: absError,
+          errorRate: errorRate
+        };
+      });
+
+      // 重複（再送信）がある場合は最新（配列の後ろ）を優先してユニーク化
+      const uniqueMap = {};
+      list.forEach(item => {
+        uniqueMap[item.groupName] = item;
+      });
+
+      // 絶対誤差が少ない順にソート
+      state.detectedData = Object.values(uniqueMap).sort((a, b) => a.absError - b.absError);
+    }
+
+    // ダッシュボード可視化
+    function renderDashboard() {
+      document.getElementById('dashboard-content').classList.remove('hidden');
+
+      // 2. 順位表マトリクスの構築
+      renderDashboardMatrix();
+
+      // 3. 対象別ビジュアル比較グラフの構築
+      renderDashboardCharts();
+    }
+
+    // マトリクス表の生成 (誤差の少ない順に王冠バッジ自動付与)
+    function renderDashboardMatrix() {
+      const bodyRow = document.getElementById('matrix-body');
+      bodyRow.innerHTML = '';
+
+      state.detectedData.forEach((group, index) => {
+        let crownBadge = `<span class="text-xs text-slate-400 font-bold mr-2 w-6 inline-block text-right">${index + 1}位</span>`;
+        if (index === 0) {
+          crownBadge = '<span class="text-amber-500 mr-1.5 text-lg" title="予測精度1位">👑</span>';
+        } else if (index === 1) {
+          crownBadge = '<span class="text-slate-400 mr-1.5 text-lg" title="予測精度2位">🥈</span>';
+        }
+
+        const absErrorStr = group.absError === 0 ? "Perfect!" : `${group.absError.toLocaleString()}`;
+        const errColor = group.absError === 0 ? "text-emerald-600 font-black" : "text-rose-500 font-semibold";
+        const rateStr = group.errorRate === 0 ? "0.0%" : `${group.errorRate.toFixed(1)}%`;
+
+        const rowHtml = `
+          <td class="px-6 py-4 font-bold text-slate-900 border border-slate-200 bg-white flex items-center">
+            ${crownBadge}${group.groupName}
+          </td>
+          <td class="px-4 py-4 text-center font-mono font-semibold text-slate-800 border border-slate-200 bg-white">
+            ${group.predicted.toLocaleString()}
+          </td>
+          <td class="px-4 py-4 text-center font-mono text-slate-500 border border-slate-200 bg-white">
+            ${state.actualValue.toLocaleString()}
+          </td>
+          <td class="px-4 py-4 text-center font-mono border border-slate-200 bg-slate-50 ${errColor}">
+            ${absErrorStr}
+          </td>
+          <td class="px-4 py-4 text-center font-mono text-slate-600 border border-slate-200 bg-white">
+            ${rateStr}
+          </td>
+        `;
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50 transition-colors";
+        tr.innerHTML = rowHtml;
+        bodyRow.appendChild(tr);
+      });
+    }
+
+    // 対象ごとに各チームの予測数値を可視化比較するグラフの描画
+    function renderDashboardCharts() {
+      const chartsCont = document.getElementById('summary-charts-container');
+      chartsCont.innerHTML = '';
+
+      // グラフ全体の最大表示上限を決定（予測値の最大か、実績値のいずれか大きい方）
+      const maxLimit = Math.max(state.actualValue, ...state.detectedData.map(t => t.predicted), 1);
+
+      state.detectedData.forEach((teamData, index) => {
+        const percent = (teamData.predicted / maxLimit) * 100;
+        const actualPercent = (state.actualValue / maxLimit) * 100;
+
+        let crownIcon = '';
+        if (index === 0 && teamData.absError === 0) {
+          crownIcon = '👑 '; // ピッタリ
+        } else if (index === 0) {
+          crownIcon = '🎯 '; // 最も近かったチーム
+        }
+
+        const errorText = teamData.absError === 0 ? 'ピッタリ！' : `誤差: ±${teamData.absError.toLocaleString()} (誤差率: ${teamData.errorRate.toFixed(1)}%)`;
+        const errColor = teamData.absError === 0 ? 'text-emerald-600 font-bold' : 'text-slate-500';
+
+        const barCard = document.createElement('div');
+        barCard.className = "space-y-1 bg-white border border-slate-100 p-4 rounded-xl shadow-sm";
+        barCard.innerHTML = `
+          <div class="flex justify-between text-xs font-bold text-slate-700">
+            <span class="truncate pr-2">${crownIcon}${teamData.groupName}</span>
+            <span class="font-mono text-slate-500 text-[11px]">予測: <strong class="text-slate-800">${teamData.predicted.toLocaleString()}</strong> <span class="mx-1">/</span> <span class="${errColor}">${errorText}</span></span>
+          </div>
+          
+          <!-- 予測バーチャート（実績値をピン破線で重ね合わせる） -->
+          <div class="relative w-full bg-slate-100 h-7 rounded-lg border border-slate-200">
+            <div class="bg-indigo-600/80 h-full rounded-l-lg transition-all duration-500" style="width: ${percent}%"></div>
+            
+            <!-- 実績値ピンライン（オーバーレイ） -->
+            <div class="absolute top-0 bottom-0 border-l-2 border-dashed border-rose-500 z-10" style="left: ${actualPercent}%" title="確定実績値: ${state.actualValue}">
+              <span class="absolute -top-4 -left-3 text-[8px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-black scale-75 select-none">実績</span>
+            </div>
+          </div>
+        `;
+
+        chartsCont.appendChild(barCard);
+      });
+    }
+  </script>
+</body>
+</html>
