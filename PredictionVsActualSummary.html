@@ -30,7 +30,7 @@
         <div>
           <span class="bg-indigo-100 text-indigo-800 text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">ACCURACY CHALLENGE</span>
           <h1 id="app-title" class="text-2xl md:text-3xl font-black text-indigo-900 mt-2">予測値・実績値 精度分析サマリー</h1>
-          <p class="text-xs text-slate-500 mt-1">提出された予測データと、確定した実績データの誤差（絶対誤差）を瞬時に計算し、予測精度を可視化します。</p>
+          <p class="text-xs text-slate-500 mt-1">実績値（中央基準線）を軸として、過不足と絶対誤差をビジュアルで視覚分析します。</p>
         </div>
         <button type="button" onclick="loadDashboardData()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition-all self-start md:self-auto">
           🔄 データを最新にする
@@ -70,12 +70,14 @@
         </div>
       </section>
 
-      <!-- 予測精度ランキング（降順：絶対誤差の小さい順ソート＆金銀王冠） -->
+      <!-- 予測精度ランキング（降順：実績値以上で誤差小 ➔ 実績値未満で誤差小のソート順） -->
       <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 border-b border-slate-100 pb-2 flex items-center">
-          🏆 予測精度ランキング一覧表 (誤差の少ない順)
+          🏆 予測精度ランキング一覧表（評価順）
         </h2>
-        <p class="text-xs text-slate-500 mb-4">確定した実績値との差（絶対誤差）を自動算出。誤差が最も少ない優秀なチームから順番にソートして並べています。</p>
+        <p class="text-xs text-slate-500 mb-4">
+          ※実績以上（過大）で差が小さい順を上位とし、次いで実績未満（過小）で実績に近い順にソートしています（実績を大きく下回るチームほど下位になります）。
+        </p>
         
         <div class="overflow-x-auto rounded-xl border border-slate-200">
           <table class="w-full text-sm text-left text-slate-600 border-collapse">
@@ -84,23 +86,26 @@
                 <th scope="col" class="px-6 py-3.5 font-black text-slate-700 bg-slate-100 rounded-tl-xl border border-slate-200">順位 / チーム名</th>
                 <th scope="col" class="px-4 py-3.5 font-black text-slate-700 text-center border border-slate-200">予測値</th>
                 <th scope="col" class="px-4 py-3.5 font-black text-slate-700 text-center border border-slate-200">実績値</th>
+                <th scope="col" class="px-4 py-3.5 font-black text-slate-700 text-center border border-slate-200">差違 (予測-実績)</th>
                 <th scope="col" class="px-4 py-3.5 font-black text-indigo-700 bg-indigo-50 text-center border border-slate-200">絶対誤差</th>
                 <th scope="col" class="px-4 py-3.5 font-black text-indigo-700 bg-indigo-50 text-center border border-slate-200 rounded-tr-xl">誤差率</th>
               </tr>
             </thead>
             <tbody id="matrix-body" class="divide-y divide-slate-100">
-              <!-- 動的データ行 -->
+              <!-- 各チームのデータ行がソートされて挿入されます -->
             </tbody>
           </table>
         </div>
       </section>
 
-      <!-- 予測対象ごとのビジュアル比較チャート -->
+      <!-- 実績値を中央（基準線）とした予測精度比較グラフ -->
       <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
         <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 border-b border-slate-100 pb-2">
-          📊 グループ別予測精度比較グラフ
+          📊 実績値基準 差違可視化グラフ (中央 = 実績値)
         </h2>
-        <p class="text-xs text-slate-500 mb-6">確定実績値（赤い点線）に対して、各グループが提示した予測値のズレを視覚的に比較します（最も優秀なチームから順に上から並んでいます）。</p>
+        <p class="text-xs text-slate-500 mb-6">
+          実績値を中央線（50%）として、実績値を上回った予測（プラス乖離）は<span class="text-indigo-600 font-bold">右側に青色</span>で、実績値を下回った予測（マイナス乖離）は<span class="text-rose-600 font-bold">左側に赤色</span>でメーターが伸びます。
+        </p>
         <div id="summary-charts-container" class="space-y-4">
           <!-- グラフが動的に挿入されます -->
         </div>
@@ -109,7 +114,7 @@
     </main>
   </div>
 
-  <script>
+  <script {filepath="PredictionVsActualSummary.html"}>
     const state = {
       resultSheetUrl: '',  // 予測提出データのCSV URL
       actualValue: 0,      // 実績値（URLパラメータ `actual` から取得した単一数値）
@@ -265,18 +270,20 @@
       if (!state.keyMap.predictValue) state.keyMap.predictValue = fields[1] || fields[0];
     }
 
-    // 各グループの予測誤差を計算して優秀順（絶対誤差が小さい順）に並べ替え
+    // 【要望に対応したソートロジック】各グループの予測誤差を計算して条件別に並べ替え
     function calculateAccuracy() {
       const list = state.results.map(row => {
         const name = row[state.keyMap.groupName] ? row[state.keyMap.groupName].trim() : '不明';
         const predicted = cleanNumber(row[state.keyMap.predictValue]);
-        const absError = Math.abs(predicted - state.actualValue);
+        const diff = predicted - state.actualValue; // 予測 - 実績 (プラスなら過大、マイナスなら過小)
+        const absError = Math.abs(diff);
         // 実績値に対する誤差率
         const errorRate = state.actualValue > 0 ? (absError / state.actualValue) * 100 : 0;
 
         return {
           groupName: name,
           predicted: predicted,
+          diff: diff,
           absError: absError,
           errorRate: errorRate
         };
@@ -288,8 +295,17 @@
         uniqueMap[item.groupName] = item;
       });
 
-      // 絶対誤差が少ない順にソート
-      state.detectedData = Object.values(uniqueMap).sort((a, b) => a.absError - b.absError);
+      const uniqueList = Object.values(uniqueMap);
+
+      // 【重要】ソート順の細分化
+      // A群: 実績値以上 (diff >= 0) -> diff（誤差）が「小さい」順
+      const groupA = uniqueList.filter(item => item.diff >= 0).sort((a, b) => a.diff - b.diff);
+
+      // B群: 実績値未満 (diff < 0) -> diff（差違）が「大きい（実績に近い）」順 (例: -10点 > -50点 ➔ 降順)
+      const groupB = uniqueList.filter(item => item.diff < 0).sort((a, b) => b.diff - a.diff);
+
+      // 要望：実績を超えて差が小さいものが高評価（A群の昇順）、実績を下回り差が大きいものが低評価（B群を誤差の小さい順＝実績に近い順に並べて最後尾に差の大きなものを配置）
+      state.detectedData = [...groupA, ...groupB];
     }
 
     // ダッシュボード可視化
@@ -303,7 +319,7 @@
       renderDashboardCharts();
     }
 
-    // マトリクス表の生成 (誤差の少ない順に王冠バッジ自動付与)
+    // マトリクス表の生成
     function renderDashboardMatrix() {
       const bodyRow = document.getElementById('matrix-body');
       bodyRow.innerHTML = '';
@@ -317,8 +333,22 @@
         }
 
         const absErrorStr = group.absError === 0 ? "Perfect!" : `${group.absError.toLocaleString()}`;
-        const errColor = group.absError === 0 ? "text-emerald-600 font-black" : "text-rose-500 font-semibold";
+        const errColor = group.absError === 0 ? "text-emerald-600 font-black" : "text-indigo-600 font-semibold";
         const rateStr = group.errorRate === 0 ? "0.0%" : `${group.errorRate.toFixed(1)}%`;
+
+        // 差違 (予測 - 実績) の表示用文字列とカラー判定
+        let diffStr = "";
+        let diffColor = "";
+        if (group.diff > 0) {
+          diffStr = `+${group.diff.toLocaleString()}`;
+          diffColor = "text-indigo-600 font-bold";
+        } else if (group.diff < 0) {
+          diffStr = `${group.diff.toLocaleString()}`;
+          diffColor = "text-rose-500 font-bold";
+        } else {
+          diffStr = "±0";
+          diffColor = "text-emerald-600 font-bold";
+        }
 
         const rowHtml = `
           <td class="px-6 py-4 font-bold text-slate-900 border border-slate-200 bg-white flex items-center">
@@ -330,7 +360,10 @@
           <td class="px-4 py-4 text-center font-mono text-slate-500 border border-slate-200 bg-white">
             ${state.actualValue.toLocaleString()}
           </td>
-          <td class="px-4 py-4 text-center font-mono border border-slate-200 bg-slate-50 ${errColor}">
+          <td class="px-4 py-4 text-center font-mono border border-slate-200 bg-white ${diffColor}">
+            ${diffStr}
+          </td>
+          <td class="px-4 py-4 text-center font-mono border border-slate-200 bg-slate-50 ${group.absError === 0 ? 'text-emerald-600 font-black' : 'text-slate-800'}">
             ${absErrorStr}
           </td>
           <td class="px-4 py-4 text-center font-mono text-slate-600 border border-slate-200 bg-white">
@@ -345,43 +378,65 @@
       });
     }
 
-    // 対象ごとに各チームの予測数値を可視化比較するグラフの描画
+    // 【要望に対応したグラフ表示ロジック】実績値を中央に配置したバイポーラグラフの描画
     function renderDashboardCharts() {
       const chartsCont = document.getElementById('summary-charts-container');
       chartsCont.innerHTML = '';
 
-      // グラフ全体の最大表示上限を決定（予測値の最大か、実績値のいずれか大きい方）
-      const maxLimit = Math.max(state.actualValue, ...state.detectedData.map(t => t.predicted), 1);
+      // 左右に伸ばすための「最大のブレ幅（最大絶対誤差）」を求める
+      const maxDiff = Math.max(...state.detectedData.map(t => t.absError), 1);
 
       state.detectedData.forEach((teamData, index) => {
-        const percent = (teamData.predicted / maxLimit) * 100;
-        const actualPercent = (state.actualValue / maxLimit) * 100;
-
         let crownIcon = '';
         if (index === 0 && teamData.absError === 0) {
           crownIcon = '👑 '; // ピッタリ
         } else if (index === 0) {
-          crownIcon = '🎯 '; // 最も近かったチーム
+          crownIcon = '🎯 '; // A群1位
         }
 
-        const errorText = teamData.absError === 0 ? 'ピッタリ！' : `誤差: ±${teamData.absError.toLocaleString()} (誤差率: ${teamData.errorRate.toFixed(1)}%)`;
-        const errColor = teamData.absError === 0 ? 'text-emerald-600 font-bold' : 'text-slate-500';
+        const errorText = teamData.absError === 0 ? 'ぴったり！' : `誤差: ${teamData.diff > 0 ? '+' : ''}${teamData.diff.toLocaleString()} (誤差率: ${teamData.errorRate.toFixed(1)}%)`;
+        const errColor = teamData.absError === 0 ? 'text-emerald-600 font-bold' : (teamData.diff > 0 ? 'text-indigo-600' : 'text-rose-600');
+
+        // バイポーラメーターの計算
+        // 中央(50%)を基準とし、右に過大予測(青)、左に過小予測(赤)を伸ばす
+        let barStyle = '';
+        let barColorClass = '';
+
+        if (teamData.diff >= 0) {
+          // 実績値以上（過大）：中央(50%)から右へ伸びる
+          const widthPercent = (teamData.diff / maxDiff) * 50;
+          barStyle = `left: 50%; width: ${widthPercent}%;`;
+          barColorClass = 'bg-indigo-600';
+        } else {
+          // 実績値未満（過小）：(50 - 幅)%から中央(50%)に向けて左から右へ伸びる
+          const widthPercent = (teamData.absError / maxDiff) * 50;
+          const leftPosition = 50 - widthPercent;
+          barStyle = `left: ${leftPosition}%; width: ${widthPercent}%;`;
+          barColorClass = 'bg-rose-500';
+        }
 
         const barCard = document.createElement('div');
         barCard.className = "space-y-1 bg-white border border-slate-100 p-4 rounded-xl shadow-sm";
         barCard.innerHTML = `
           <div class="flex justify-between text-xs font-bold text-slate-700">
             <span class="truncate pr-2">${crownIcon}${teamData.groupName}</span>
-            <span class="font-mono text-slate-500 text-[11px]">予測: <strong class="text-slate-800">${teamData.predicted.toLocaleString()}</strong> <span class="mx-1">/</span> <span class="${errColor}">${errorText}</span></span>
+            <span class="font-mono text-slate-500 text-[11px]">予測: <strong class="text-slate-800">${teamData.predicted.toLocaleString()}</strong> <span class="mx-1">/</span> <span class="font-bold ${errColor}">${errorText}</span></span>
           </div>
           
-          <!-- 予測バーチャート（実績値をピン破線で重ね合わせる） -->
-          <div class="relative w-full bg-slate-100 h-7 rounded-lg border border-slate-200">
-            <div class="bg-indigo-600/80 h-full rounded-l-lg transition-all duration-500" style="width: ${percent}%"></div>
+          <!-- バイポーラ式 予測差異バーチャート（中央が実績値） -->
+          <div class="relative w-full bg-slate-100 h-7 rounded-lg border border-slate-200 overflow-hidden">
+            <!-- 伸縮バー -->
+            <div class="absolute top-0 bottom-0 ${barColorClass} transition-all duration-500" style="${barStyle}"></div>
             
-            <!-- 実績値ピンライン（オーバーレイ） -->
-            <div class="absolute top-0 bottom-0 border-l-2 border-dashed border-rose-500 z-10" style="left: ${actualPercent}%" title="確定実績値: ${state.actualValue}">
-              <span class="absolute -top-4 -left-3 text-[8px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-black scale-75 select-none">実績</span>
+            <!-- 中央：確定実績値の基準線（50%ライン） -->
+            <div class="absolute top-0 bottom-0 w-0.5 bg-slate-400 z-10" style="left: 50%">
+              <span class="absolute -top-3.5 -left-3 text-[7px] bg-slate-800 text-white px-1 py-0.1 rounded-full font-black scale-75 select-none z-20">実績線</span>
+            </div>
+            
+            <!-- スケール案内表示 -->
+            <div class="absolute inset-0 flex justify-between px-2 items-center pointer-events-none text-[8px] text-slate-400 font-mono font-bold">
+              <span>不足（過小）</span>
+              <span>超過（過大）</span>
             </div>
           </div>
         `;
