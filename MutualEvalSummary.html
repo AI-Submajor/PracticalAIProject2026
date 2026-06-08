@@ -17,7 +17,7 @@
       <span id="status-dot" class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
       <span class="font-extrabold text-sm tracking-wider text-slate-200">Mutual Evaluation Dashboard 2026</span>
     </div>
-    <div id="connection-indicator" class="bg-slate-800 px-3 py-1 rounded text-slate-300 font-mono">
+    <div id="connection-indicator" class="bg-slate-800 px-3 py-1 rounded text-slate-300 font-mono text-xs">
       データロード待ち...
     </div>
   </div>
@@ -28,9 +28,9 @@
     <header class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span class="bg-indigo-600 text-white text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">TEACHER ONLY</span>
+          <span class="bg-indigo-600 text-white text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">AUTO REPORT</span>
           <h1 id="app-title" class="text-2xl md:text-3xl font-black text-indigo-400 mt-2">相互評価 リアルタイム集計サマリー</h1>
-          <p class="text-xs text-slate-400 mt-1">集計用スプレッドシートのWeb公開CSVからリアルタイムにデータを取得・分析・可視化します。</p>
+          <p class="text-xs text-slate-400 mt-1">集計結果CSVから「評価対象」「評価点」「コメント」「提出状況」を全自動で解析して可視化します。</p>
         </div>
         <button type="button" onclick="loadDashboardData()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-3 rounded-xl shadow-md transition self-start md:self-auto">
           🔄 データを最新にする
@@ -54,33 +54,33 @@
       <p id="error-log-text" class="text-xs md:text-sm leading-relaxed font-mono whitespace-pre-wrap text-rose-300 bg-rose-950/80 p-4 rounded-xl border border-rose-900"></p>
     </div>
 
-    <!-- メインコンテンツ領域（ロード完了後にフェードイン） -->
+    <!-- メインコンテンツ領域（ロード完了後に表示） -->
     <main id="dashboard-content" class="hidden space-y-8">
       
       <!-- 1. 提出監査セクション -->
       <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
         <h2 class="text-base md:text-lg font-black text-slate-100 mb-4 border-b border-slate-700 pb-2 flex items-center">
-          📊 提出・未提出状況（名簿対照監査）
+          📊 提出・未提出状況（班対照監査）
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div class="bg-slate-900 p-4 rounded-xl text-center border border-slate-800">
-            <span class="text-xs text-slate-400 font-bold block mb-1">登録名簿総数</span>
-            <span class="text-3xl font-black text-slate-200" id="stat-total">0</span> <span class="text-xs text-slate-400">名/グループ</span>
+            <span class="text-xs text-slate-400 font-bold block mb-1">認識された総グループ数</span>
+            <span class="text-3xl font-black text-slate-200" id="stat-total">0</span> <span class="text-xs text-slate-400">グループ</span>
           </div>
           <div class="bg-emerald-950/40 p-4 rounded-xl text-center border border-emerald-900/50">
             <span class="text-xs text-emerald-400 font-bold block mb-1">提出完了</span>
-            <span class="text-3xl font-black text-emerald-400" id="stat-submitted">0</span> <span class="text-xs text-emerald-400">名/グループ</span>
+            <span class="text-3xl font-black text-emerald-400" id="stat-submitted">0</span> <span class="text-xs text-emerald-400">グループ</span>
           </div>
           <div class="bg-indigo-950/40 p-4 rounded-xl text-center border border-indigo-900/50">
-            <span class="text-xs text-indigo-400 font-bold block mb-1">提出完了率</span>
+            <span class="text-xs text-indigo-400 font-bold block mb-1">回答完了率</span>
             <span class="text-3xl font-black text-indigo-400" id="stat-percent">0%</span>
           </div>
         </div>
         
         <div class="space-y-2">
-          <span class="text-xs font-bold text-slate-400 block">名簿提出ステータス:</span>
-          <div id="student-status-list" class="flex flex-wrap gap-2 pt-1">
-            <!-- 名簿と照合されたステータスバッジが動的に挿入されます -->
+          <span class="text-xs font-bold text-slate-400 block">各グループの送信ステータス:</span>
+          <div id="group-status-list" class="flex flex-wrap gap-2 pt-1">
+            <!-- 送信ステータスが色バッジで自動挿入されます -->
           </div>
         </div>
       </section>
@@ -88,22 +88,22 @@
       <!-- 2. 定量スコア平均チャートセクション -->
       <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
         <h2 class="text-base md:text-lg font-black text-slate-100 mb-2 border-b border-slate-700 pb-2">
-          📈 各対象の観点別平均獲得スコア
+          📈 評価対象別の観点得点平均サマリー
         </h2>
-        <p class="text-xs text-slate-400 mb-6">※4点満点中で、各グループが他の全員から獲得した平均点の分布です。</p>
+        <p class="text-xs text-slate-400 mb-6">データ行から自動判定された数値評価カラムの平均分布です。グラフは最高得点に対する割合を示します。</p>
         <div id="summary-charts-container" class="space-y-6">
-          <!-- 評価カードが動的にバインドされます -->
+          <!-- スコアカードが動的に挿入されます -->
         </div>
       </section>
 
-      <!-- 3. 定性コメント（グループ別折りたたみアコーディオン） -->
+      <!-- 3. 定性コメントアコーディオン -->
       <section class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-sm">
         <h2 class="text-base md:text-lg font-black text-slate-100 mb-2 border-b border-slate-700 pb-2">
-          💬 対象宛て記述フィードバック（グループ別整理）
+          💬 記述フィードバック（評価対象別アコーディオン）
         </h2>
-        <p class="text-xs text-slate-400 mb-6">対象グループを選択して展開すると、寄せられたコメント（良かった点・改善点）が一度に確認できます。</p>
+        <p class="text-xs text-slate-400 mb-6">自由記述コメント（良かった点、改善できる点など）を評価対象グループごとに自動集約しています。</p>
         <div id="feedback-comments-accordion" class="space-y-4">
-          <!-- コメント用アコーディオンが動的に挿入されます -->
+          <!-- コメントが動的に挿入されます -->
         </div>
       </section>
 
@@ -111,19 +111,20 @@
   </div>
 
   <script>
-    // 状態管理
     const state = {
-      config: { appTitle: '', targetDataUrl: '', evaluationItemsUrl: '', resultSheetUrl: '' },
-      targets: [], // 名簿
-      items: [],   // 評価基準
-      results: []  // 送信された評価データ
+      resultSheetUrl: '',
+      results: [],       // 読み込んだ評価結果行データ
+      detectedTargets: [], // CSVから自動抽出された「評価対象リスト」
+      detectedGroups: [],  // CSVから自動抽出された「回答側グループリスト」
+      pointColumns: [],    // 自動判定された「数値評価カラム」
+      textColumns: []      // 自動判定された「コメントカラム」
     };
 
     // 観点選択値の最初の数値(1〜4)のみを抽出・加工するヘルパー関数
     function extractScore(val) {
-      if (!val) return '';
-      const match = val.toString().match(/^\d+/);
-      return match ? match[0] : val;
+      if (val === undefined || val === null) return '';
+      const match = val.toString().trim().match(/^\d+/);
+      return match ? match[0] : '';
     }
 
     // GoogleスプレッドシートからCSVを取得
@@ -134,7 +135,7 @@
       
       const clean = text.trim();
       if (clean.startsWith('<!DOCTYPE') || clean.startsWith('<html') || clean.startsWith('<xml')) {
-        throw new Error("スプレッドシートが一般公開されていないか、URLが正しくありません。「Webに公開」から「カンマ区切り値(.csv)」で取得できているかご確認ください。");
+        throw new Error("指定されたURLからCSVデータを取得できませんでした。スプレッドシートの「Webに公開」から「カンマ区切り値(.csv)」で正しく公開されているかご確認ください。");
       }
       return text;
     }
@@ -151,84 +152,30 @@
       return target;
     }
 
-    // 起動時の初期パラメータ解析
+    // 初期起動処理
     window.onload = async function() {
       const urlParams = new URLSearchParams(window.location.search);
-      let configUrl = urlParams.get('config');
+      let resultParam = urlParams.get('result') || urlParams.get('config'); // config引数での代用もサポート
 
-      // クエリパラメータの ? 結合崩れパッチ
+      // URLパラメータの ? 結合崩れパッチ
       const href = window.location.href;
-      const configMatch = href.match(/[?&]config=([\s\S]+)/);
-      if (configMatch) {
-        let extracted = configMatch[1];
+      const resultMatch = href.match(/[?&](result|config)=([\s\S]+)/);
+      if (resultMatch) {
+        let extracted = resultMatch[2];
         const nextParamIdx = extracted.indexOf('&');
         if (nextParamIdx !== -1) {
           extracted = extracted.substring(0, nextParamIdx);
         }
-        configUrl = decodeURIComponent(extracted);
+        resultParam = decodeURIComponent(extracted);
       }
 
-      if (!configUrl) {
-        showFatalError("URLパラメータに `?config=【設定スプレッドシートのWeb公開CSV URL】` が指定されていません。");
+      if (!resultParam) {
+        showFatalError("URLパラメータに `?result=【集計スプレッドシートのWeb公開CSV URL】` が指定されていません。\n\n[例]: MutualEvalSummary.html?result=https://docs.google.com/spreadsheets/d/e/.../pub?output=csv");
         return;
       }
 
-      try {
-        // 1. Config（基本設定）のパース
-        updateLoaderNotice('授業設定を同期しています...');
-        const configCsv = await fetchCsv(cleanSheetUrl(configUrl));
-        const parsedConfig = Papa.parse(configCsv, { header: false, skipEmptyLines: true });
-        
-        parsedConfig.data.forEach((row, i) => {
-          if (i === 0) return;
-          const k = row[0]?.trim(), v = row[1]?.trim();
-          if (k.includes('タイトル')) {
-            state.config.appTitle = v;
-          } else if (k.includes('項目') || k.includes('定義')) {
-            state.config.evaluationItemsUrl = cleanSheetUrl(v);
-          } else if (k.includes('対象') || k.includes('名簿')) {
-            state.config.targetDataUrl = cleanSheetUrl(v);
-          } else if (k.includes('結果') || k.includes('集計') || k.includes('API') || k.includes('URL')) {
-            state.config.resultSheetUrl = cleanSheetUrl(v);
-          }
-        });
-
-        // パラメータが正しく定義されているか
-        if (!state.config.targetDataUrl || !state.config.evaluationItemsUrl || !state.config.resultSheetUrl) {
-          throw new Error("基本設定シート内に「対象」「評価項目定義」「集計結果」の項目が見つかりませんでした。行のヘッダーが正しいかご確認ください。");
-        }
-
-        document.getElementById('app-title').textContent = state.config.appTitle || '相互評価集計ダッシュボード';
-
-        // 2. 名簿データの取得
-        updateLoaderNotice('対象名簿を同期しています...');
-        const targetCsv = await fetchCsv(state.config.targetDataUrl);
-        const parsedTargets = Papa.parse(targetCsv, { header: false, skipEmptyLines: true });
-        parsedTargets.data.forEach((row, i) => {
-          if (i === 0) return;
-          const name = row[1] || row[0];
-          if (name) state.targets.push({ id: `id-${i}`, name: name.trim() });
-        });
-
-        // 3. 評価定義項目の取得
-        updateLoaderNotice('項目評価定義を同期しています...');
-        const itemsCsv = await fetchCsv(state.config.evaluationItemsUrl);
-        const parsedItems = Papa.parse(itemsCsv, { header: false, skipEmptyLines: true });
-        parsedItems.data.forEach((row, i) => {
-          if (i === 0) return;
-          const section = row[0]?.includes('共通') ? '共通' : '個別';
-          const type = (row[2]?.includes('ラジオ') || row[2]?.includes('選択')) ? 'radio' : 'text';
-          if (row[1]) {
-            state.items.push({ id: `item-${i}`, section, name: row[1].trim(), type });
-          }
-        });
-
-        // すべての構造定義のロードに成功したら、集計データの読み込みへ
-        loadDashboardData();
-
-      } catch (err) {
-        showFatalError(err.message);
-      }
+      state.resultSheetUrl = cleanSheetUrl(resultParam);
+      loadDashboardData();
     };
 
     function updateLoaderNotice(msg) {
@@ -240,33 +187,87 @@
       const errScreen = document.getElementById('error-screen');
       errScreen.classList.remove('hidden');
       document.getElementById('error-log-text').textContent = log;
-      document.getElementById('connection-indicator').textContent = "同期エラー";
-      document.getElementById('connection-indicator').className = "bg-rose-800 px-3 py-1 rounded text-white font-mono";
+      document.getElementById('connection-indicator').textContent = "読み込みエラー";
+      document.getElementById('connection-indicator').className = "bg-rose-800 px-3 py-1 rounded text-white font-mono text-xs";
       document.getElementById('status-dot').className = "w-3 h-3 rounded-full bg-rose-500";
     }
 
-    // スプレッドシート（評価結果）から最新の回答レコードを取得
+    // スプレッドシート（評価結果）から最新の回答レコードを取得して全自動解析
     async function loadDashboardData() {
       const loader = document.getElementById('loader-notice');
       loader.classList.remove('hidden');
-      updateLoaderNotice('最新の評価結果データをスプレッドシートから読み込んでいます...');
+      updateLoaderNotice('スプレッドシートから集計結果CSVをロードしています...');
 
       try {
-        const resultsCsv = await fetchCsv(state.config.resultSheetUrl);
+        const resultsCsv = await fetchCsv(state.resultSheetUrl);
         const parsedResults = Papa.parse(resultsCsv, { header: true, skipEmptyLines: true });
+        
         state.results = parsedResults.data;
+        if (state.results.length === 0) {
+          throw new Error("スプレッドシートから読み込まれた評価レコードが0件です。まだ誰も評価を送信していない可能性があります。");
+        }
 
-        // 集計成功のUIに更新
+        // --- 全自動スキーマ判定 (Auto-Schema Detector) ---
+        detectSchema(parsedResults.meta.fields);
+
+        // UIに状態反映
         document.getElementById('connection-indicator').textContent = "ONLINE 同期成功";
-        document.getElementById('connection-indicator').className = "bg-green-800 px-3 py-1 rounded text-white font-mono";
+        document.getElementById('connection-indicator').className = "bg-green-800 px-3 py-1 rounded text-white font-mono text-xs";
         document.getElementById('status-dot').className = "w-3 h-3 rounded-full bg-green-500 animate-pulse";
         loader.classList.add('hidden');
 
-        // ビジュアルダッシュボードの描画処理
+        // ビジュアル描画
         renderDashboard();
 
       } catch (err) {
-        showFatalError(`評価結果データの読み込み中にエラーが起きました。\n[集計結果URL]: ${state.config.resultSheetUrl}\n\n【詳細内容】: ${err.message}`);
+        showFatalError(`集計結果の自動解析に失敗しました。\n[ターゲットURL]: ${state.resultSheetUrl}\n\n【詳細内容】: ${err.message}`);
+      }
+    }
+
+    // CSVヘッダー列から役割（自分のグループ、評価対象、数値、コメント）を動的に検出するロジック
+    function detectSchema(fields) {
+      state.pointColumns = [];
+      state.textColumns = [];
+
+      // 特徴的な名前からあらかじめ決まっている主キー列をマッピング
+      fields.forEach(field => {
+        const clean = field.trim();
+        if (!clean) return;
+
+        // すでに主キーと判定されたものは数値・記述の自動判定から外す
+        const isPrimaryKey = (
+          clean === "タイムスタンプ" || clean === "Timestamp" ||
+          clean === "自分の名前" || clean === "回答者名" || clean === "EvaluatorName" ||
+          clean === "所属グループ" || clean === "自分のグループ" || clean === "EvaluatorGroup" ||
+          clean === "評価対象" || clean === "TargetName"
+        );
+
+        if (isPrimaryKey) return;
+
+        // 数値項目の自動判定: カラム名に「観点」「問」「Q」「評価」「点」が含まれる場合
+        if (clean.includes("観点") || clean.includes("評価") || clean.includes("点") || clean.includes("問") || /^q\d+/i.test(clean)) {
+          state.pointColumns.push(clean);
+        } else {
+          // それ以外をすべてコメント（記述）と判定
+          state.textColumns.push(clean);
+        }
+      });
+
+      // 評価対象(Target)の重複なきリストを動的に逆算・抽出
+      const rawTargets = state.results.map(row => 
+        row['評価対象'] || row['TargetName']
+      ).filter(Boolean);
+      state.detectedTargets = [...new Set(rawTargets)].sort();
+
+      // 回答者側のグループ(自分のグループ)を動的に逆算・抽出
+      const rawGroups = state.results.map(row => 
+        row['自分のグループ'] || row['所属グループ'] || row['EvaluatorGroup']
+      ).filter(Boolean);
+      state.detectedGroups = [...new Set(rawGroups)].sort();
+
+      // もし回答者のグループが抽出できなかった場合、評価対象リストを名簿の母体として補完
+      if (state.detectedGroups.length === 0) {
+        state.detectedGroups = [...state.detectedTargets];
       }
     }
 
@@ -274,82 +275,78 @@
     function renderDashboard() {
       document.getElementById('dashboard-content').classList.remove('hidden');
 
-      // --- 1. 提出監査（名簿対照） ---
-      const totalStudents = state.targets.length;
+      // --- 1. 提出監査（名簿対照）の自動分析 ---
+      const totalGroups = state.detectedGroups.length;
       
-      // 送信データに記録されている一意な「自分の名前」（または回答者名、EvaluatorName）を抽出
-      const submittedNames = [...new Set(state.results.map(row => 
-        row['自分の名前'] || row['回答者名'] || row['EvaluatorName']
+      // 送信データに記録されている一意な「回答した自分のグループ」を抽出
+      const submittedGroups = [...new Set(state.results.map(row => 
+        row['自分のグループ'] || row['所属グループ'] || row['EvaluatorGroup']
       ).filter(Boolean))];
 
-      const statSubmitted = submittedNames.length;
-      const statPercent = totalStudents > 0 ? Math.round((statSubmitted / totalStudents) * 100) : 0;
+      const statSubmitted = submittedGroups.length;
+      const statPercent = totalGroups > 0 ? Math.round((statSubmitted / totalGroups) * 100) : 0;
 
-      document.getElementById('stat-total').textContent = totalStudents;
+      document.getElementById('stat-total').textContent = totalGroups;
       document.getElementById('stat-submitted').textContent = statSubmitted;
       document.getElementById('stat-percent').textContent = `${statPercent}%`;
 
-      const statusListCont = document.getElementById('student-status-list');
+      const statusListCont = document.getElementById('group-status-list');
       statusListCont.innerHTML = '';
       
-      state.targets.forEach(student => {
-        const isDone = submittedNames.includes(student.name);
+      state.detectedGroups.forEach(groupName => {
+        const isDone = submittedGroups.includes(groupName);
         const span = document.createElement('span');
         if (isDone) {
           span.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/80 flex items-center gap-1 select-none";
-          span.innerHTML = `✓ ${student.name}`;
+          span.innerHTML = `✓ ${groupName}`;
         } else {
           span.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-950 text-rose-300 border border-rose-900 flex items-center gap-1 animate-pulse select-none";
-          span.innerHTML = `未 ${student.name}`;
+          span.innerHTML = `未 ${groupName}`;
         }
         statusListCont.appendChild(span);
       });
 
-
-      // --- 2. 定量スコア・定性コメントのグループ別マトリクス計算 ---
-      const pointItems = state.items.filter(it => it.section === '個別' && it.type === 'radio');
-      const textItems = state.items.filter(it => it.section === '個別' && it.type === 'text');
-
+      // --- 2. 各評価対象の定量観点スコア平均計算 ---
       const chartsCont = document.getElementById('summary-charts-container');
       chartsCont.innerHTML = '';
 
       const commentsCont = document.getElementById('feedback-comments-accordion');
       commentsCont.innerHTML = '';
 
-      state.targets.forEach(target => {
-        // このグループ（個人）に対する評価レコードを全てフィルタリング
+      state.detectedTargets.forEach((targetName, targetIdx) => {
+        // この評価対象に対する全レコードを抽出
         const targetRecords = state.results.filter(row => 
-          row['評価対象'] === target.name || row['TargetName'] === target.name
+          row['評価対象'] === targetName || row['TargetName'] === targetName
         );
 
-        // A. スコアチャートカードの生成
+        // A. 観点別グラフカードの構築
         const card = document.createElement('div');
         card.className = "bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-sm";
         
         let cardHtml = `
           <div class="flex justify-between items-center border-b border-slate-700 pb-2">
-            <h3 class="font-extrabold text-indigo-400 text-lg">${target.name}</h3>
+            <h3 class="font-extrabold text-indigo-400 text-lg">${targetName}</h3>
             <span class="text-xs font-mono font-bold bg-slate-700 px-2.5 py-1 rounded-md text-slate-300 border border-slate-600">評価数: ${targetRecords.length}件</span>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         `;
 
-        pointItems.forEach(item => {
-          // この対象の、各評価観点の点数平均を算出（1〜4の数値部分のみをパッチ）
+        state.pointColumns.forEach(columnName => {
+          // この観点に対する全スコアを平均値化（回答値の先頭1文字から安全に数値を抽出）
           const scores = targetRecords.map(row => {
-            const rawVal = row[item.name] || '';
+            const rawVal = row[columnName];
             const num = parseInt(extractScore(rawVal));
             return isNaN(num) ? null : num;
           }).filter(val => val !== null);
 
           const sum = scores.reduce((a, b) => a + b, 0);
           const avg = scores.length > 0 ? (sum / scores.length).toFixed(2) : '0.00';
-          const percent = scores.length > 0 ? (avg / 4) * 100 : 0;
+          const percent = scores.length > 0 ? (avg / 4) * 100 : 0; // 基本的に4点満点基準でグラフ比率を表示
 
           cardHtml += `
             <div class="space-y-1">
               <div class="flex justify-between text-xs font-bold text-slate-300">
-                <span class="truncate pr-2">${item.name}</span>
+                <span class="truncate pr-2" title="${columnName}">${columnName}</span>
                 <span class="font-mono text-indigo-400">${avg} / 4.00</span>
               </div>
               <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
@@ -363,38 +360,38 @@
         card.innerHTML = cardHtml;
         chartsCont.appendChild(card);
 
-        // B. 定性テキスト（コメント）アコーディオンの生成
-        const accId = `acc-${target.id}`;
+        // B. 定性記述（コメント）アコーディオンカードの構築
+        const accId = `acc-target-${targetIdx}`;
         const accDiv = document.createElement('div');
         accDiv.className = "border border-slate-700 rounded-xl bg-slate-800 overflow-hidden shadow-sm";
 
         let commentsHtml = `
           <button type="button" onclick="document.getElementById('${accId}').classList.toggle('hidden')" class="w-full flex justify-between items-center p-4 bg-slate-850 hover:bg-slate-700/50 font-bold text-slate-200 text-left border-b border-slate-700 transition">
-            <span>💬 ${target.name} へのフィードバック</span>
+            <span>💬 ${targetName} へのフィードバック一覧</span>
             <span class="text-xs text-indigo-300 font-mono bg-indigo-950 border border-indigo-900 px-3 py-1 rounded-full">コメント: ${targetRecords.length}件</span>
           </button>
           <div id="${accId}" class="hidden p-4 space-y-4 bg-slate-900 max-h-96 overflow-y-auto">
         `;
 
         if (targetRecords.length === 0) {
-          commentsHtml += `<p class="text-xs text-slate-500 text-center py-4">まだこのグループに対する評価ログは登録されていません。</p>`;
+          commentsHtml += `<p class="text-xs text-slate-500 text-center py-4">まだこの対象に対するコメントログは登録されていません。</p>`;
         } else {
           targetRecords.forEach((record) => {
-            const sender = record['自分の名前'] || record['回答者名'] || '未特定';
-            const group = record['所属グループ'] || '無し';
+            const sender = record['自分の名前'] || record['回答者名'] || '匿名';
+            const group = record['自分のグループ'] || record['所属グループ'] || record['EvaluatorGroup'] || '不明';
             commentsHtml += `
               <div class="border-l-4 border-indigo-500 pl-3 py-2 space-y-1.5 text-xs bg-slate-800/80 p-3 rounded-r-lg border border-slate-700/50">
                 <div class="flex justify-between font-bold text-slate-400 border-b border-slate-700 pb-1 text-[10px]">
-                  <span>回答者: ${sender} (班: ${group})</span>
+                  <span>回答者: ${sender} (グループ: ${group})</span>
                   <span class="font-mono text-slate-500">${record['タイムスタンプ'] || ''}</span>
                 </div>
             `;
 
-            textItems.forEach(item => {
-              const textVal = record[item.name] || '（未記入）';
+            state.textColumns.forEach(columnName => {
+              const textVal = record[columnName] || '（未記入）';
               commentsHtml += `
                 <div class="pt-1">
-                  <span class="font-extrabold text-indigo-400 text-[10px] block">■ ${item.name}</span>
+                  <span class="font-extrabold text-indigo-400 text-[10px] block">■ ${columnName}</span>
                   <p class="leading-relaxed text-slate-300 whitespace-pre-wrap mt-0.5">${textVal}</p>
                 </div>
               `;
